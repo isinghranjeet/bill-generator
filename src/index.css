@@ -1,0 +1,381 @@
+/* 1️⃣ Google Font MUST be first */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* 2️⃣ Tailwind directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 3️⃣ CSS variables & base theme */
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 221 83% 53%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+
+    --radius: 0.5rem;
+
+    /* Invoice specific colors */
+    --invoice-border: 0 0% 0%;
+    --invoice-header-bg: 221 83% 53%;
+    --invoice-header-text: 0 0% 100%;
+    --invoice-row-alt: 210 40% 98%;
+    --invoice-summary-bg: 45 100% 96%;
+    --invoice-success: 142 76% 36%;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-primary: 240 6% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 240 6% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217 91% 60%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 213 27% 84%;
+
+    --invoice-border: 0 0% 100%;
+    --invoice-header-bg: 217 91% 60%;
+    --invoice-header-text: 0 0% 100%;
+    --invoice-row-alt: 217 33% 17%;
+    --invoice-summary-bg: 45 100% 10%;
+    --invoice-success: 142 76% 36%;
+
+    --sidebar-background: 240 6% 10%;
+    --sidebar-foreground: 240 5% 96%;
+    --sidebar-primary: 224 76% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4% 16%;
+    --sidebar-accent-foreground: 240 5% 96%;
+    --sidebar-border: 240 4% 16%;
+    --sidebar-ring: 217 91% 60%;
+  }
+}
+
+/* 4️⃣ Global base styles */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+}
+
+/* 5️⃣ Components */
+@layer components {
+  .invoice-container {
+    @apply bg-card shadow-lg rounded-lg overflow-hidden;
+  }
+
+  .invoice-table {
+    @apply w-full border-collapse;
+  }
+
+  .invoice-table th {
+    @apply bg-primary text-primary-foreground font-semibold text-sm py-2 px-3 text-left;
+  }
+
+  .invoice-table td {
+    @apply border border-border py-2 px-3 text-sm;
+  }
+
+  .invoice-table tr:nth-child(even) td {
+    @apply bg-muted/50;
+  }
+
+  .invoice-input {
+    @apply w-full bg-transparent border-0 focus:outline-none focus:ring-0 text-sm;
+  }
+
+  .invoice-cell-input {
+    @apply w-full bg-transparent border border-transparent hover:border-input focus:border-primary focus:outline-none rounded px-2 py-1 text-sm transition-colors;
+  }
+
+  .invoice-section-title {
+    @apply font-semibold text-xs uppercase tracking-wide text-muted-foreground mb-1;
+  }
+
+  .invoice-value {
+    @apply font-medium text-foreground;
+  }
+
+  .signature-box {
+    @apply border-2 border-dashed border-border rounded-lg h-20 flex items-end justify-center pb-2 text-xs text-muted-foreground;
+  }
+
+  .summary-row {
+    @apply flex justify-between py-1 text-sm;
+  }
+
+  .summary-row-total {
+    @apply flex justify-between py-2 text-base font-bold border-t-2 border-primary mt-2;
+  }
+}
+
+/* 6️⃣ Print styles - Consolidated and corrected */
+@media print {
+  @page {
+    size: A4;
+    margin: 0mm;
+  }
+  
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    zoom: 90%;
+  }
+  
+  /* Hide all non-printable elements */
+  .no-print,
+  .print-hidden,
+  button,
+  .btn,
+  [class*="print:hidden"],
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Invoice container styling */
+  .invoice-container,
+  .max-w-\[210mm\] {
+    max-width: 210mm !important;
+    width: 210mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  
+  /* Table styling */
+  .invoice-table,
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    font-size: 8pt !important;
+  }
+  
+  .invoice-table th,
+  .invoice-table td,
+  th, 
+  td {
+    padding: 1mm 2mm !important;
+    border: 0.5pt solid #666 !important;
+    font-size: 8pt !important;
+    line-height: 1.1 !important;
+    word-wrap: break-word;
+  }
+  
+  /* Input and form field styling for print */
+  input[type="text"],
+  input[type="number"],
+  textarea,
+  select,
+  .invoice-input,
+  .invoice-cell-input {
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    appearance: none;
+    -webkit-appearance: none;
+    display: block !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  
+  /* Show input values with subtle indicator */
+  input:not([value=""]):before,
+  textarea:not(:empty):before {
+    content: attr(value);
+    display: inline;
+  }
+  
+  /* Background adjustments for print */
+  .bg-gray-50,
+  .bg-gray-100,
+  .bg-muted\/30,
+  .bg-muted\/50,
+  .invoice-table tr:nth-child(even) td {
+    background-color: #f8f8f8 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Header backgrounds */
+  .invoice-table th,
+  .bg-primary {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  /* Border styling */
+  .border,
+  .border-gray-300,
+  [class*="border"] {
+    border-color: #666 !important;
+    border-width: 0.5pt !important;
+  }
+  
+  .border-2 {
+    border-width: 1pt !important;
+  }
+  
+  .border-black {
+    border-color: black !important;
+  }
+  
+  /* Text adjustments */
+  * {
+    color: black !important;
+    text-shadow: none !important;
+  }
+  
+  .text-\[9px\] {
+    font-size: 8pt !important;
+  }
+  
+  .text-\[10px\] {
+    font-size: 9pt !important;
+  }
+  
+  .text-sm {
+    font-size: 9pt !important;
+  }
+  
+  .text-xs {
+    font-size: 8pt !important;
+  }
+  
+  /* Ensure signature box prints properly */
+  .signature-box {
+    border: 1pt dashed #666 !important;
+    min-height: 50px !important;
+  }
+  
+  /* Remove interactive elements */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    font-size: 8pt;
+    color: #666;
+  }
+}
+
+
+
+@media print {
+  @page {
+    margin: 10mm;
+    size: A4;
+  }
+  
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  table {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+@media print {
+  @page {
+    margin: 0;
+    size: A4;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .no-print,
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  .invoice-container {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}

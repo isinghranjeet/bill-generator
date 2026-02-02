@@ -115,81 +115,88 @@ export const ProfessionalInvoice = ({
 
   return (
     <div className="bg-white p-6 print:p-0 w-[210mm] min-h-[297mm] mx-auto font-sans print:border-0 print:shadow-none print:overflow-visible">
-      {/* Header - Company & Invoice Info */}
-      <div className="border-b-2 border-black pb-3 mb-3 print:border-black print:pb-2 print:mb-2">
-        <div className="grid grid-cols-3 gap-3 print:gap-2">
-          {/* Company Details */}
-          <div className="col-span-2 print:col-span-2">
-            <h1 className="text-xl font-bold text-blue-800 mb-1 print:text-lg print:mb-0">{company.name}</h1>
-            <div className="text-xs space-y-0.5 print:text-[10px]">
-              <p className="font-medium">{company.address}</p>
-              <div className="grid grid-cols-2 gap-1">
-                <p><span className="font-semibold">GSTIN:</span> {company.gstin}</p>
-                <p><span className="font-semibold">State:</span> {company.state} ({company.stateCode})</p>
-              </div>
-              <div className="grid grid-cols-2 gap-1">
-                <p><span className="font-semibold">Mobile:</span> {company.mobile || "Not provided"}</p>
-                <p><span className="font-semibold">Email:</span> {company.email || "Not provided"}</p>
+      {/* Single Header with Logo */}
+      <div className="border-b-2 border-black pb-4 mb-4">
+        <div className="flex justify-between items-start">
+          {/* Company Logo Section */}
+          <div className="flex-1">
+            <div className="flex items-start gap-3 mb-2">
+              {/* Logo Image */}
+              {company.logo && (
+                <div className="logo-container">
+                  <img 
+                    src={company.logo} 
+                    alt={`${company.name} Logo`}
+                    className="h-16 w-auto object-contain"
+                  />
+                </div>
+              )}
+              
+              {/* Company Text Details */}
+              <div className="flex-1">
+                <div className="company-name-section">
+                  <h1 className="text-3xl font-black text-blue-900 tracking-wider mb-1">
+                    {company.name || "RENT MY EVENT"}
+                  </h1>
+                  <div className="text-sm font-medium text-blue-600 uppercase tracking-widest mb-2">
+                    Style Your Moment
+                  </div>
+                </div>
+                
+                <div className="text-xs text-gray-600 space-y-0.5">
+                  <p className="font-medium">{company.address}</p>
+                  <div className="grid grid-cols-2 gap-1">
+                    <p><span className="font-semibold">GSTIN:</span> {company.gstin}</p>
+                    <p><span className="font-semibold">State:</span> {company.state} ({company.stateCode})</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <p><span className="font-semibold">Mobile:</span> {company.mobile || "Not provided"}</p>
+                    <p><span className="font-semibold">Email:</span> {company.email || "Not provided"}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
           
-          {/* Invoice Details - 修复了日期显示问题 */}
-          <div className="border-l pl-3 print:pl-2 print:overflow-visible">
-            <h2 className="text-xl font-bold text-center mb-2 print:text-lg print:mb-1">TAX INVOICE</h2>
-            <div className="space-y-1 print:space-y-0.5 print:overflow-visible">
-              <div className="grid grid-cols-2 gap-1 print:gap-0.5 items-center">
-                <span className="font-semibold text-xs print:text-[10px]">Invoice No:</span>
+          {/* Invoice Details */}
+          <div className="border-l pl-3 ml-3">
+            <h2 className="text-xl font-bold text-center mb-3 text-blue-800">TAX INVOICE</h2>
+            <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-1 items-center">
+                <span className="font-semibold text-xs">Invoice No:</span>
                 {editable && onDetailsChange ? (
-                  <>
-                    <Input
-                      value={details.invoiceNo}
-                      onChange={(e) => onDetailsChange({...details, invoiceNo: e.target.value})}
-                      className="h-6 text-xs print:hidden w-full"
-                    />
-                    <span className="hidden print:inline font-medium text-xs print:text-[10px]">
-                      {details.invoiceNo}
-                    </span>
-                  </>
+                  <Input
+                    value={details.invoiceNo}
+                    onChange={(e) => onDetailsChange({...details, invoiceNo: e.target.value})}
+                    className="h-6 text-xs w-full"
+                  />
                 ) : (
-                  <span className="font-medium text-xs print:text-[10px]">{details.invoiceNo}</span>
+                  <span className="font-medium text-xs">{details.invoiceNo}</span>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-1 print:gap-0.5 items-center">
-                <span className="font-semibold text-xs print:text-[10px]">Date:</span>
+              <div className="grid grid-cols-2 gap-1 items-center">
+                <span className="font-semibold text-xs">Date:</span>
                 {editable && onDetailsChange ? (
-                  <>
-                    <Input
-                      type="date"
-                      value={format(details.date, 'yyyy-MM-dd')}
-                      onChange={(e) => onDetailsChange({...details, date: new Date(e.target.value)})}
-                      className="h-6 text-xs print:hidden w-full"
-                    />
-                    <span className="hidden print:inline text-xs print:text-[10px] print:whitespace-nowrap print:overflow-visible">
-                      {format(details.date, 'dd/MM/yyyy')}
-                    </span>
-                  </>
+                  <Input
+                    type="date"
+                    value={format(details.date, 'yyyy-MM-dd')}
+                    onChange={(e) => onDetailsChange({...details, date: new Date(e.target.value)})}
+                    className="h-6 text-xs w-full"
+                  />
                 ) : (
-                  <span className="text-xs print:text-[10px] print:whitespace-nowrap print:overflow-visible">
-                    {format(details.date, 'dd/MM/yyyy')}
-                  </span>
+                  <span className="text-xs">{format(details.date, 'dd/MM/yyyy')}</span>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-1 print:gap-0.5 items-center">
-                <span className="font-semibold text-xs print:text-[10px]">Payment Terms:</span>
+              <div className="grid grid-cols-2 gap-1 items-center">
+                <span className="font-semibold text-xs">Payment Terms:</span>
                 {editable && onDetailsChange ? (
-                  <>
-                    <Input
-                      value={details.modeOfPayment}
-                      onChange={(e) => onDetailsChange({...details, modeOfPayment: e.target.value})}
-                      className="h-6 text-xs print:hidden w-full"
-                    />
-                    <span className="hidden print:inline text-xs print:text-[10px]">
-                      {details.modeOfPayment || "-"}
-                    </span>
-                  </>
+                  <Input
+                    value={details.modeOfPayment}
+                    onChange={(e) => onDetailsChange({...details, modeOfPayment: e.target.value})}
+                    className="h-6 text-xs w-full"
+                  />
                 ) : (
-                  <span className="text-xs print:text-[10px]">{details.modeOfPayment || "-"}</span>
+                  <span className="text-xs">{details.modeOfPayment || "-"}</span>
                 )}
               </div>
             </div>
@@ -198,12 +205,12 @@ export const ProfessionalInvoice = ({
       </div>
 
       {/* Buyer & Consignee Section */}
-      <div className="mb-4 border-b border-gray-300 pb-3 print:pb-2">
-        <div className="grid grid-cols-2 gap-4 print:gap-3">
+      <div className="mb-4 border-b border-gray-300 pb-3">
+        <div className="grid grid-cols-2 gap-4">
           {/* Buyer Section */}
           <div>
-            <h3 className="font-bold text-xs mb-1 text-blue-700 print:text-[10px]">BILL TO</h3>
-            <div className="border border-gray-300 p-2 rounded print:p-1.5">
+            <h3 className="font-bold text-xs mb-1 text-blue-700">BILL TO</h3>
+            <div className="border border-gray-300 p-2 rounded">
               {editable && onBuyerChange ? (
                 <>
                   <div className="space-y-1 print:hidden">
@@ -235,20 +242,20 @@ export const ProfessionalInvoice = ({
                       />
                     </div>
                   </div>
-                  <div className="hidden print:block text-xs space-y-0.5 print:text-[10px]">
+                  <div className="hidden print:block text-xs space-y-0.5">
                     <p className="font-semibold">{buyer.name || "Not provided"}</p>
                     <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
-                    <div className="grid grid-cols-2 gap-1 mt-1 print:gap-0.5">
+                    <div className="grid grid-cols-2 gap-1 mt-1">
                       <p><span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}</p>
                       <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="text-xs space-y-0.5 print:text-[10px]">
+                <div className="text-xs space-y-0.5">
                   <p className="font-semibold">{buyer.name || "Not provided"}</p>
                   <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
-                  <div className="grid grid-cols-2 gap-1 mt-1 print:gap-0.5">
+                  <div className="grid grid-cols-2 gap-1 mt-1">
                     <p><span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}</p>
                     <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
                   </div>
@@ -259,8 +266,8 @@ export const ProfessionalInvoice = ({
 
           {/* Consignee Section */}
           <div>
-            <h3 className="font-bold text-xs mb-1 text-blue-700 print:text-[10px]">SHIP TO</h3>
-            <div className="border border-gray-300 p-2 rounded print:p-1.5">
+            <h3 className="font-bold text-xs mb-1 text-blue-700">SHIP TO</h3>
+            <div className="border border-gray-300 p-2 rounded">
               {editable && onConsigneeChange ? (
                 <>
                   <div className="space-y-1 print:hidden">
@@ -292,20 +299,20 @@ export const ProfessionalInvoice = ({
                       />
                     </div>
                   </div>
-                  <div className="hidden print:block text-xs space-y-0.5 print:text-[10px]">
+                  <div className="hidden print:block text-xs space-y-0.5">
                     <p className="font-semibold">{consignee.name || "Not provided"}</p>
                     <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
-                    <div className="grid grid-cols-2 gap-1 mt-1 print:gap-0.5">
+                    <div className="grid grid-cols-2 gap-1 mt-1">
                       <p><span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}</p>
                       <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
                     </div>
                   </div>
                 </>
               ) : (
-                <div className="text-xs space-y-0.5 print:text-[10px]">
+                <div className="text-xs space-y-0.5">
                   <p className="font-semibold">{consignee.name || "Not provided"}</p>
                   <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
-                  <div className="grid grid-cols-2 gap-1 mt-1 print:gap-0.5">
+                  <div className="grid grid-cols-2 gap-1 mt-1">
                     <p><span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}</p>
                     <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
                   </div>
@@ -316,64 +323,64 @@ export const ProfessionalInvoice = ({
         </div>
       </div>
 
-      {/* Items Table - Print Optimized */}
-      <div className="mb-4 print:mb-3">
-        <div className="overflow-x-auto print:overflow-visible">
-          <table className="w-full border-collapse text-[11px] print:text-[9px]">
+      {/* Items Table */}
+      <div className="mb-4">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs">
             <thead>
-              <tr className="bg-blue-50 print:bg-gray-100">
-                <th className="border border-gray-400 p-1 text-center w-8 print:w-6 print:p-0.5">Sr.</th>
-                <th className="border border-gray-400 p-1 text-left print:p-0.5">Description</th>
-                <th className="border border-gray-400 p-1 text-center w-20 print:w-16 print:p-0.5">HSN</th>
-                <th className="border border-gray-400 p-1 text-center w-16 print:w-14 print:p-0.5">Rate (₹)</th>
-                <th className="border border-gray-400 p-1 text-center w-10 print:w-8 print:p-0.5">Qty</th>
-                <th className="border border-gray-400 p-1 text-center w-20 print:w-18 print:p-0.5">Taxable Value (₹)</th>
-                <th className="border border-gray-400 p-1 text-center w-10 print:w-8 print:p-0.5">GST%</th>
-                <th className="border border-gray-400 p-1 text-center w-20 print:w-18 print:p-0.5 font-bold">Amount (₹)</th>
+              <tr className="bg-blue-50">
+                <th className="border border-gray-400 p-1 text-center">Sr.</th>
+                <th className="border border-gray-400 p-1 text-left">Description</th>
+                <th className="border border-gray-400 p-1 text-center">HSN</th>
+                <th className="border border-gray-400 p-1 text-center">Rate (₹)</th>
+                <th className="border border-gray-400 p-1 text-center">Qty</th>
+                <th className="border border-gray-400 p-1 text-center">Taxable Value (₹)</th>
+                <th className="border border-gray-400 p-1 text-center">GST%</th>
+                <th className="border border-gray-400 p-1 text-center font-bold">Amount (₹)</th>
                 {editable && (
-                  <th className="border border-gray-400 p-1 text-center w-8 print:w-6 print:p-0.5 print:hidden">Action</th>
+                  <th className="border border-gray-400 p-1 text-center print:hidden">Action</th>
                 )}
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={item.id} className="hover:bg-gray-50 print:hover:bg-transparent">
-                  <td className="border border-gray-300 p-1 text-center print:p-0.5">{item.srNo}</td>
-                  <td className="border border-gray-300 p-1 print:p-0.5">
+                <tr key={item.id}>
+                  <td className="border border-gray-300 p-1 text-center">{item.srNo}</td>
+                  <td className="border border-gray-300 p-1">
                     {editable ? (
                       <>
                         <Input
                           value={item.description}
                           onChange={(e) => updateItem(index, 'description', e.target.value)}
-                          className="h-5 text-[11px] w-full print:hidden"
+                          className="h-5 text-xs w-full print:hidden"
                           placeholder="Item description"
                         />
-                        <span className="hidden print:inline text-[11px] print:text-[9px]">
+                        <span className="hidden print:inline text-xs">
                           {item.description || "-"}
                         </span>
                       </>
                     ) : (
-                      <span className="text-[11px] print:text-[9px]">{item.description || "-"}</span>
+                      <span className="text-xs">{item.description || "-"}</span>
                     )}
                   </td>
-                  <td className="border border-gray-300 p-1 print:p-0.5">
+                  <td className="border border-gray-300 p-1">
                     {editable ? (
                       <>
                         <Input
                           value={item.hsn}
                           onChange={(e) => updateItem(index, 'hsn', e.target.value)}
-                          className="h-5 text-[11px] text-center w-full print:hidden"
+                          className="h-5 text-xs text-center w-full print:hidden"
                           placeholder="HSN Code"
                         />
-                        <span className="hidden print:inline block text-center text-[11px] print:text-[9px]">
+                        <span className="hidden print:inline block text-center text-xs">
                           {item.hsn || "-"}
                         </span>
                       </>
                     ) : (
-                      <span className="block text-center text-[11px] print:text-[9px]">{item.hsn || "-"}</span>
+                      <span className="block text-center text-xs">{item.hsn || "-"}</span>
                     )}
                   </td>
-                  <td className="border border-gray-300 p-1 print:p-0.5">
+                  <td className="border border-gray-300 p-1">
                     {editable ? (
                       <>
                         <Input
@@ -382,45 +389,45 @@ export const ProfessionalInvoice = ({
                           step="0.01"
                           value={item.rate}
                           onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
-                          className="h-5 text-[11px] text-right w-full print:hidden"
+                          className="h-5 text-xs text-right w-full print:hidden"
                           placeholder="0.00"
                         />
-                        <span className="hidden print:inline block text-right text-[11px] print:text-[9px] font-medium">
+                        <span className="hidden print:inline block text-right text-xs font-medium">
                           {item.rate.toFixed(2)}
                         </span>
                       </>
                     ) : (
-                      <span className="block text-right text-[11px] print:text-[9px] font-medium">
+                      <span className="block text-right text-xs font-medium">
                         {item.rate.toFixed(2)}
                       </span>
                     )}
                   </td>
-                  <td className="border border-gray-300 p-1 print:p-0.5">
+                  <td className="border border-gray-300 p-1">
                     {editable ? (
                       <>
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="1"
                           value={item.quantity}
                           onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="h-5 text-[11px] text-center w-full print:hidden"
+                          className="h-5 text-xs text-center w-full print:hidden"
                           placeholder="1"
                         />
-                        <span className="hidden print:inline block text-center text-[11px] print:text-[9px] font-medium">
+                        <span className="hidden print:inline block text-center text-xs font-medium">
                           {item.quantity}
                         </span>
                       </>
                     ) : (
-                      <span className="block text-center text-[11px] print:text-[9px] font-medium">{item.quantity}</span>
+                      <span className="block text-center text-xs font-medium">{item.quantity}</span>
                     )}
                   </td>
-                  <td className="border border-gray-300 p-1 print:p-0.5 text-right">
-                    <span className="text-[11px] print:text-[9px] font-semibold">
+                  <td className="border border-gray-300 p-1 text-right">
+                    <span className="text-xs font-semibold">
                       {item.taxableValue.toFixed(2)}
                     </span>
                   </td>
-                  <td className="border border-gray-300 p-1 print:p-0.5">
+                  <td className="border border-gray-300 p-1">
                     {editable ? (
                       <>
                         <Input
@@ -430,19 +437,19 @@ export const ProfessionalInvoice = ({
                           step="0.01"
                           value={item.gstPercent || 18}
                           onChange={(e) => updateItem(index, 'gstPercent', parseFloat(e.target.value) || 0)}
-                          className="h-5 text-[11px] text-center w-full print:hidden"
+                          className="h-5 text-xs text-center w-full print:hidden"
                           placeholder="18"
                         />
-                        <span className="hidden print:inline block text-center text-[11px] print:text-[9px] font-medium">
+                        <span className="hidden print:inline block text-center text-xs font-medium">
                           {item.gstPercent || 18}%
                         </span>
                       </>
                     ) : (
-                      <span className="block text-center text-[11px] print:text-[9px] font-medium">{item.gstPercent || 18}%</span>
+                      <span className="block text-center text-xs font-medium">{item.gstPercent || 18}%</span>
                     )}
                   </td>
-                  <td className="border border-gray-300 p-1 print:p-0.5 text-right">
-                    <span className="text-[11px] print:text-[9px] font-bold text-blue-700">
+                  <td className="border border-gray-300 p-1 text-right">
+                    <span className="text-xs font-bold text-blue-700">
                       {item.total.toFixed(2)}
                     </span>
                   </td>
@@ -453,7 +460,7 @@ export const ProfessionalInvoice = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteItem(item.id)}
-                        className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 print:hidden"
+                        className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                         title="Delete item"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -464,18 +471,18 @@ export const ProfessionalInvoice = ({
               ))}
               
               {/* Totals Row */}
-              <tr className="bg-gray-50 font-bold print:bg-gray-100">
-                <td colSpan={5} className="border border-gray-300 p-1 text-right pr-2 print:p-0.5 print:pr-1">
-                  <span className="text-[11px] print:text-[9px]">Total:</span>
+              <tr className="bg-gray-50 font-bold">
+                <td colSpan={5} className="border border-gray-300 p-1 text-right pr-2">
+                  <span className="text-xs">Total:</span>
                 </td>
-                <td className="border border-gray-300 p-1 text-right print:p-0.5">
-                  <span className="text-[11px] print:text-[9px] text-blue-700">
+                <td className="border border-gray-300 p-1 text-right">
+                  <span className="text-xs text-blue-700">
                     {totals.taxableValue.toFixed(2)}
                   </span>
                 </td>
-                <td className="border border-gray-300 p-1 print:p-0.5"></td>
-                <td className="border border-gray-300 p-1 text-right print:p-0.5">
-                  <span className="text-[11px] print:text-[9px] text-green-700 font-bold">
+                <td className="border border-gray-300 p-1"></td>
+                <td className="border border-gray-300 p-1 text-right">
+                  <span className="text-xs text-green-700 font-bold">
                     {totals.total.toFixed(2)}
                   </span>
                 </td>
@@ -501,12 +508,12 @@ export const ProfessionalInvoice = ({
       </div>
 
       {/* Bottom Section */}
-      <div className="mb-3 print:mb-2">
-        <div className="grid grid-cols-2 gap-4 print:gap-3">
+      <div className="mb-3">
+        <div className="grid grid-cols-2 gap-4">
           {/* Left: Bank Details */}
           <div>
-            <h4 className="font-bold text-xs mb-1 text-blue-700 print:text-[10px]">BANK DETAILS</h4>
-            <div className="border border-gray-300 p-2 rounded bg-gray-50 print:p-1.5">
+            <h4 className="font-bold text-xs mb-1 text-blue-700">BANK DETAILS</h4>
+            <div className="border border-gray-300 p-2 rounded bg-gray-50">
               {editable && onCompanyChange ? (
                 <>
                   <div className="space-y-2 print:hidden">
@@ -555,7 +562,7 @@ export const ProfessionalInvoice = ({
                       />
                     </div>
                   </div>
-                  <div className="hidden print:block text-xs space-y-0.5 print:text-[10px]">
+                  <div className="hidden print:block text-xs space-y-0.5">
                     <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
                     <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
                     <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
@@ -564,7 +571,7 @@ export const ProfessionalInvoice = ({
                   </div>
                 </>
               ) : (
-                <div className="text-xs space-y-0.5 print:text-[10px]">
+                <div className="text-xs space-y-0.5">
                   <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
                   <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
                   <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
@@ -577,25 +584,25 @@ export const ProfessionalInvoice = ({
 
           {/* Right: Amount Summary */}
           <div>
-            <h4 className="font-bold text-xs mb-1 text-blue-700 print:text-[10px]">AMOUNT SUMMARY</h4>
-            <div className="border border-gray-300 rounded overflow-hidden mb-3 print:mb-2">
-              <table className="w-full text-xs print:text-[10px]">
+            <h4 className="font-bold text-xs mb-1 text-blue-700">AMOUNT SUMMARY</h4>
+            <div className="border border-gray-300 rounded overflow-hidden mb-3">
+              <table className="w-full text-xs">
                 <tbody>
                   <tr className="border-b border-gray-300">
-                    <td className="p-2 font-semibold print:p-1">Taxable Value:</td>
-                    <td className="p-2 text-right font-bold print:p-1">
+                    <td className="p-2 font-semibold">Taxable Value:</td>
+                    <td className="p-2 text-right font-bold">
                       ₹{totals.taxableValue.toFixed(2)}
                     </td>
                   </tr>
                   <tr>
-                    <td className="p-2 font-semibold print:p-1">GST ({items[0]?.gstPercent || 18}%):</td>
-                    <td className="p-2 text-right font-bold print:p-1">
+                    <td className="p-2 font-semibold">GST ({items[0]?.gstPercent || 18}%):</td>
+                    <td className="p-2 text-right font-bold">
                       ₹{totals.gstAmount.toFixed(2)}
                     </td>
                   </tr>
-                  <tr className="border-t-2 border-gray-400 bg-blue-50 print:bg-gray-100">
-                    <td className="p-2 font-bold text-base print:p-1 print:text-sm">GRAND TOTAL:</td>
-                    <td className="p-2 text-right font-bold text-base text-green-700 print:p-1 print:text-sm">
+                  <tr className="border-t-2 border-gray-400 bg-blue-50">
+                    <td className="p-2 font-bold text-base">GRAND TOTAL:</td>
+                    <td className="p-2 text-right font-bold text-base text-green-700">
                       ₹{totals.total.toFixed(2)}
                     </td>
                   </tr>
@@ -605,8 +612,8 @@ export const ProfessionalInvoice = ({
             
             {/* Amount in Words */}
             <div>
-              <p className="font-semibold text-xs mb-1 text-blue-700 print:text-[10px]">AMOUNT IN WORDS</p>
-              <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs italic print:p-1.5 print:text-[10px]">
+              <p className="font-semibold text-xs mb-1 text-blue-700">AMOUNT IN WORDS</p>
+              <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs italic">
                 {convertToWords(totals.total)}
               </div>
             </div>
@@ -615,9 +622,9 @@ export const ProfessionalInvoice = ({
       </div>
 
       {/* Remarks */}
-      <div className="mb-4 print:mb-3">
+      <div className="mb-4">
         <div>
-          <p className="font-semibold text-xs mb-1 text-blue-700 print:text-[10px]">REMARKS</p>
+          <p className="font-semibold text-xs mb-1 text-blue-700">REMARKS</p>
           {editable && onRemarksChange ? (
             <>
               <Textarea
@@ -627,12 +634,12 @@ export const ProfessionalInvoice = ({
                 placeholder="Enter any remarks or terms here..."
                 rows={2}
               />
-              <div className="hidden print:block border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs print:p-1.5 print:text-[10px]">
+              <div className="hidden print:block border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs">
                 {remarks || "No remarks"}
               </div>
             </>
           ) : (
-            <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs print:p-1.5 print:text-[10px]">
+            <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs">
               {remarks || "No remarks"}
             </div>
           )}
@@ -640,22 +647,22 @@ export const ProfessionalInvoice = ({
       </div>
 
       {/* Signatures */}
-      <div className="pt-3 border-t-2 border-black print:pt-2 print:overflow-visible">
-        <div className="grid grid-cols-2 gap-4 print:gap-3">
+      <div className="pt-3 border-t-2 border-black">
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <p className="font-bold text-xs mb-6 print:mb-4 print:text-[10px]">For {company.name}</p>
-            <div className="text-center mt-10 print:mt-8">
-              <div className="border-t border-black w-40 mx-auto pt-1 print:w-32">
-                <p className="text-xs font-semibold print:text-[10px]">Authorized Signatory</p>
+            <p className="font-bold text-xs mb-6">For {company.name}</p>
+            <div className="text-center mt-10">
+              <div className="border-t border-black w-40 mx-auto pt-1">
+                <p className="text-xs font-semibold">Authorized Signatory</p>
               </div>
             </div>
           </div>
           
           <div className="text-right">
-            <p className="font-bold text-xs mb-6 print:mb-4 print:text-[10px]">Receiver's Signature</p>
-            <div className="text-center mt-10 print:mt-8">
-              <div className="border-t border-black w-40 ml-auto pt-1 print:w-32">
-                <p className="text-xs font-semibold print:text-[10px]">Seal & Signature</p>
+            <p className="font-bold text-xs mb-6">Receiver's Signature</p>
+            <div className="text-center mt-10">
+              <div className="border-t border-black w-40 ml-auto pt-1">
+                <p className="text-xs font-semibold">Seal & Signature</p>
               </div>
             </div>
           </div>

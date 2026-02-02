@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InvoiceData } from "@/types/invoice";
-import { generateInvoiceNumber, calculateItemTotals, calculateInvoiceSummary } from "@/utils/calculations";
+import { generateInvoiceNumber } from "@/utils/calculations";
 import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Download, Save, RotateCcw, Eye, Edit } from "lucide-react";
+import { ArrowLeft, Printer, Download, Save, RotateCcw, Eye, Edit, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const defaultInvoiceData: InvoiceData = {
   company: {
@@ -20,8 +22,9 @@ const defaultInvoiceData: InvoiceData = {
     ifscCode: "SBIN0001234",
     branchAddress: "Mandawali Branch, New Delhi",
     accountHolderName: "Rent My EVENT",
-    mobile: "+91 9876543210",
-    email: "info@rentmyevent.com",
+    mobile: "+91 9625340107",
+    email: "Rentmyevents@gmail.com",
+    logo: "/logo.jpeg", 
   },
   consignee: {
     name: "",
@@ -85,12 +88,7 @@ const CreateInvoice = () => {
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(defaultInvoiceData);
   const [editable, setEditable] = useState(true);
 
-  // Calculate summary whenever items change
-  const calculatedItems = invoiceData.items.map(calculateItemTotals);
-  const summary = calculateInvoiceSummary(calculatedItems);
-
   const handlePrint = () => {
-    // Force all content to be visible before printing
     document.body.classList.add('printing');
     window.print();
     setTimeout(() => {
@@ -133,7 +131,6 @@ const CreateInvoice = () => {
   };
 
   const handleSave = () => {
-    // Validate required fields
     if (!invoiceData.buyer.name.trim()) {
       toast.error("Please enter buyer name");
       return;
@@ -154,7 +151,6 @@ const CreateInvoice = () => {
       return;
     }
 
-    // Calculate totals
     const totals = invoiceData.items.reduce(
       (acc, item) => ({
         totalAmount: acc.totalAmount + (item.rate * item.quantity),
@@ -187,7 +183,6 @@ const CreateInvoice = () => {
     handlePrint();
   };
 
-  // Helper function for number to words
   const convertToWords = (num: number): string => {
     if (num === 0) return "Zero Rupees Only";
     
@@ -226,15 +221,109 @@ const CreateInvoice = () => {
     return (result.trim() + ' Rupees Only').replace(/\s+/g, ' ');
   };
 
+  const handleLogoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Check file type
+      if (!file.type.match('image.*')) {
+        toast.error("Please upload an image file");
+        return;
+      }
+
+      // Check file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error("Image size should be less than 2MB");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const logoUrl = e.target?.result as string;
+        setInvoiceData({
+          ...invoiceData,
+          company: {
+            ...invoiceData.company,
+            logo: logoUrl
+          }
+        });
+        toast.success("Logo uploaded successfully!");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeLogo = () => {
+    setInvoiceData({
+      ...invoiceData,
+      company: {
+        ...invoiceData.company,
+        logo: "" // Remove logo
+      }
+    });
+    toast.success("Logo removed!");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 print:py-0 print:px-0 print:bg-white">
+      <style>
+        {`
+          @media print {
+            .no-print {
+              display: none !important;
+            }
+            body {
+              background-color: white !important;
+            }
+            .print-area {
+              margin: 0 !important;
+              padding: 0 !important;
+              box-shadow: none !important;
+              border: none !important;
+            }
+            .invoice-logo {
+              max-height: 80px !important;
+              width: auto !important;
+            }
+          }
+        `}
+      </style>
+      
       <div className="max-w-[210mm] mx-auto print:max-w-none print:my-0">
         {/* Toolbar */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 print:hidden bg-white p-4 rounded-lg shadow-sm border">
+        <div className="mb-6 no-print flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-lg shadow-sm border">
           <Button variant="ghost" onClick={() => navigate("/")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Admin
           </Button>
+          
+          {/* Logo Upload Section */}
+          <div className="flex items-center gap-4">
+            <div className="logo-upload-section">
+              <Label htmlFor="logo-upload" className="text-sm font-medium cursor-pointer">
+                <Upload className="h-4 w-4 inline mr-2" />
+                Upload Logo
+              </Label>
+              <Input
+                id="logo-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleLogoUpload}
+              />
+              {invoiceData.company.logo && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={removeLogo}
+                  className="ml-2 text-red-500 hover:text-red-700"
+                >
+                  Remove Logo
+                </Button>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" onClick={handleReset}>
               <RotateCcw className="h-4 w-4 mr-2" />
@@ -273,7 +362,7 @@ const CreateInvoice = () => {
         </div>
 
         {/* Invoice Template */}
-        <div className="bg-white shadow-lg print:shadow-none print:border-none">
+        <div className="print-area bg-white shadow-lg print:shadow-none print:border-none">
           <ProfessionalInvoice
             company={invoiceData.company}
             consignee={invoiceData.consignee}
@@ -292,8 +381,9 @@ const CreateInvoice = () => {
         </div>
 
         {/* Help Tips */}
-        <div className="text-center mt-6 text-sm text-gray-500 print:hidden">
+        <div className="no-print text-center mt-6 text-sm text-gray-500">
           <p className="mb-1">💡 Fill in all details, then click <strong>Save</strong> to store the invoice.</p>
+          <p>Upload your company logo using the "Upload Logo" button above.</p>
           <p>Use <strong>Preview</strong> to see how the invoice will look, then <strong>Print</strong> or <strong>PDF</strong> to generate the final bill.</p>
           <p className="text-xs text-gray-400 mt-2">
             Note: For best print results, use Chrome or Edge browser. Ensure "Background graphics" is enabled in print settings.

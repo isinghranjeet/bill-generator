@@ -386,7 +386,7 @@ export const ProfessionalInvoice = ({
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="01"
                           value={item.rate}
                           onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
                           className="h-5 text-xs text-right w-full print:hidden"
@@ -434,7 +434,7 @@ export const ProfessionalInvoice = ({
                           type="number"
                           min="0"
                           max="28"
-                          step="0.01"
+                          step="01"
                           value={item.gstPercent || 18}
                           onChange={(e) => updateItem(index, 'gstPercent', parseFloat(e.target.value) || 0)}
                           className="h-5 text-xs text-center w-full print:hidden"

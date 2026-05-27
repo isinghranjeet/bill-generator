@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { useNavigate } from "react-router-dom";
 import { InvoiceData } from "@/types/invoice";
 import { generateInvoiceNumber } from "@/utils/calculations";
@@ -84,7 +85,8 @@ const defaultInvoiceData: InvoiceData = {
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
-  const { saveInvoice } = useInvoiceStorage();
+  const { saveInvoice, apiState } = useInvoiceStorage();
+
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(defaultInvoiceData);
   const [editable, setEditable] = useState(true);
 
@@ -130,7 +132,8 @@ const CreateInvoice = () => {
     toast.success("Invoice reset successfully!");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+
     if (!invoiceData.buyer.name.trim()) {
       toast.error("Please enter buyer name");
       return;
@@ -166,9 +169,14 @@ const CreateInvoice = () => {
       totalAmountInWords: convertToWords(totals.totalAmount),
     };
 
-    saveInvoice(invoiceToSave, totals.totalAmount);
-    toast.success("Invoice saved successfully!");
-    setEditable(false);
+    try {
+      toast.loading("Saving invoice...");
+      await saveInvoice(invoiceToSave);
+      toast.success("Invoice saved successfully!");
+      setEditable(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save invoice");
+    }
   };
 
   const handleSaveAndNew = () => {

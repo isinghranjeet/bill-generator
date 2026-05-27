@@ -64,7 +64,8 @@ type FilterPeriod = "all" | "today" | "week" | "month" | "quarter" | "year";
 
 const AdminPortal = () => {
   const navigate = useNavigate();
-  const { invoices, deleteInvoice } = useInvoiceStorage();
+  const { invoices, deleteInvoice, apiState } = useInvoiceStorage();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -104,22 +105,27 @@ const AdminPortal = () => {
         switch (filterPeriod) {
           case "today":
             return invDate >= today;
-          case "week":
+          case "week": {
             const weekAgo = new Date(today);
             weekAgo.setDate(weekAgo.getDate() - 7);
             return invDate >= weekAgo;
-          case "month":
+          }
+          case "month": {
             const monthAgo = new Date(today);
             monthAgo.setMonth(monthAgo.getMonth() - 1);
             return invDate >= monthAgo;
-          case "quarter":
+          }
+          case "quarter": {
             const quarterAgo = new Date(today);
             quarterAgo.setMonth(quarterAgo.getMonth() - 3);
             return invDate >= quarterAgo;
-          case "year":
+          }
+          case "year": {
             const yearAgo = new Date(today);
             yearAgo.setFullYear(yearAgo.getFullYear() - 1);
             return invDate >= yearAgo;
+          }
+
           default:
             return true;
         }
@@ -484,11 +490,26 @@ const AdminPortal = () => {
                   
                   <TableBody>
                     {filteredInvoices.map((invoice) => {
-                      const isRecent = new Date(invoice.details.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-                      
+                      console.log("invoice row", invoice);
+
+                      const safeDateValue =
+                        invoice?.createdAt ??
+                        // Backend may store the invoice date under details.date
+                        invoice?.details?.date ??
+                        // optional alias if backend uses different field name
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (invoice as any)?.invoiceDate ??
+                        null;
+
+                      const invDate = safeDateValue ? new Date(safeDateValue) : new Date(NaN);
+                      const isRecent =
+                        !Number.isNaN(invDate.getTime()) &&
+                        invDate > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
                       return (
                         <TableRow 
-                          key={invoice.details.invoiceNo}
+                          key={invoice?.details?.invoiceNo ?? "unknown"}
+
                           className="hover:bg-muted/30 transition-colors cursor-pointer"
                           onClick={() => navigate(`/view/${invoice.details.invoiceNo}`)}
                         >
@@ -506,7 +527,8 @@ const AdminPortal = () => {
                           
                           <TableCell>
                             <div className="flex flex-col">
-                              <span>{formatDate(new Date(invoice.details.date))}</span>
+                      <span>{formatDate(safeDateValue)}</span>
+
                               <span className="text-xs text-muted-foreground">
                                 {invoice.details.modeOfPayment || "Cash"}
                               </span>

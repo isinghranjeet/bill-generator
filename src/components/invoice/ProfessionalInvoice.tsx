@@ -54,7 +54,8 @@ export const ProfessionalInvoice = ({
 
   const handleAddItem = () => {
     if (!onItemsChange) return;
-    
+
+    // Do NOT assume any GST default (e.g., 18% / 9+9).
     const newItem: InvoiceItem = {
       id: crypto.randomUUID(),
       srNo: items.length + 1,
@@ -65,16 +66,18 @@ export const ProfessionalInvoice = ({
       rate: 0,
       amount: 0,
       taxableValue: 0,
-      gstPercent: 18,
-      sgstRate: 9,
+      gstPercent: undefined,
+      discount: 0,
+
+      sgstRate: 0,
       sgstAmount: 0,
-      cgstRate: 9,
+      cgstRate: 0,
       cgstAmount: 0,
       igstRate: 0,
       igstAmount: 0,
       total: 0,
     };
-    
+
     onItemsChange([...items, newItem]);
   };
 
@@ -87,7 +90,7 @@ export const ProfessionalInvoice = ({
     onItemsChange(newItems);
   };
 
-  const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
+  const updateItem = (index: number, field: keyof InvoiceItem, value: unknown) => {
     if (!onItemsChange) return;
     
     const newItems = [...items];
@@ -101,14 +104,27 @@ export const ProfessionalInvoice = ({
     item.taxableValue = parseFloat(taxableValue.toFixed(2));
     
     // Calculate GST (simplified - always SGST+CGST for this format)
-    const gstRate = item.gstPercent || 18;
-    item.sgstRate = gstRate / 2;
-    item.cgstRate = gstRate / 2;
-    item.sgstAmount = parseFloat((taxableValue * (item.sgstRate / 100)).toFixed(2));
-    item.cgstAmount = parseFloat((taxableValue * (item.cgstRate / 100)).toFixed(2));
-    
-    item.total = parseFloat((taxableValue + item.sgstAmount + item.cgstAmount).toFixed(2));
-    
+    const gstRate = typeof item.gstPercent === "number" ? item.gstPercent : undefined;
+
+    if (gstRate === undefined) {
+      // No implicit GST default.
+      item.sgstRate = 0;
+      item.cgstRate = 0;
+      item.sgstAmount = 0;
+      item.cgstAmount = 0;
+      item.igstRate = 0;
+      item.igstAmount = 0;
+      item.total = parseFloat(taxableValue.toFixed(2));
+    } else {
+      item.sgstRate = gstRate / 2;
+      item.cgstRate = gstRate / 2;
+      item.sgstAmount = parseFloat((taxableValue * (item.sgstRate / 100)).toFixed(2));
+      item.cgstAmount = parseFloat((taxableValue * (item.cgstRate / 100)).toFixed(2));
+      item.igstRate = 0;
+      item.igstAmount = 0;
+      item.total = parseFloat((taxableValue + item.sgstAmount + item.cgstAmount).toFixed(2));
+    }
+
     newItems[index] = item;
     onItemsChange(newItems);
   };
@@ -386,7 +402,7 @@ export const ProfessionalInvoice = ({
                         <Input
                           type="number"
                           min="0"
-                          step="01"
+                          step="0.01"
                           value={item.rate}
                           onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
                           className="h-5 text-xs text-right w-full print:hidden"
@@ -434,18 +450,25 @@ export const ProfessionalInvoice = ({
                           type="number"
                           min="0"
                           max="28"
-                          step="01"
-                          value={item.gstPercent || 18}
-                          onChange={(e) => updateItem(index, 'gstPercent', parseFloat(e.target.value) || 0)}
+                          step="0.01"
+                          value={typeof item.gstPercent === 'number' ? item.gstPercent : ''}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            // If user clears the field, remove value (no default like 18%).
+                            const next = raw === '' ? undefined : parseFloat(raw);
+                            updateItem(index, 'gstPercent', next);
+                          }}
                           className="h-5 text-xs text-center w-full print:hidden"
                           placeholder="18"
                         />
                         <span className="hidden print:inline block text-center text-xs font-medium">
-                          {item.gstPercent || 18}%
+                          {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
                         </span>
                       </>
                     ) : (
-                      <span className="block text-center text-xs font-medium">{item.gstPercent || 18}%</span>
+                      <span className="block text-center text-xs font-medium">
+                        {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
+                      </span>
                     )}
                   </td>
                   <td className="border border-gray-300 p-1 text-right">
@@ -595,7 +618,7 @@ export const ProfessionalInvoice = ({
                     </td>
                   </tr>
                   <tr>
-                    <td className="p-2 font-semibold">GST ({items[0]?.gstPercent || 18}%):</td>
+                    <td className="p-2 font-semibold">GST ({typeof items[0]?.gstPercent === 'number' ? `${items[0]!.gstPercent}%` : '-'}):</td>
                     <td className="p-2 text-right font-bold">
                       ₹{totals.gstAmount.toFixed(2)}
                     </td>

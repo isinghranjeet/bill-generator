@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
+import { toast } from "sonner";
 import { InvoiceHeader } from "@/components/invoice/InvoiceHeader";
 import { PartyDetails } from "@/components/invoice/PartyDetails";
 import { ItemsTable } from "@/components/invoice/ItemsTable";
@@ -7,13 +8,58 @@ import { InvoiceSummary } from "@/components/invoice/InvoiceSummary";
 import { InvoiceFooter } from "@/components/invoice/InvoiceFooter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Download } from "lucide-react";
+import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
+import type { InvoiceData } from "@/types/invoice";
+
+type InvoiceResponse = InvoiceData & { _id?: string };
 
 const ViewInvoice = () => {
   const { invoiceNo } = useParams<{ invoiceNo: string }>();
   const navigate = useNavigate();
-  const { getInvoice } = useInvoiceStorage();
 
-  const invoice = invoiceNo ? getInvoice(decodeURIComponent(invoiceNo)) : null;
+  const [invoice, setInvoice] = useState<InvoiceResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const run = async () => {
+      if (!invoiceNo) {
+        if (mounted) setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const res = await getInvoiceApi(decodeURIComponent(invoiceNo));
+        if (mounted) setInvoice(res as unknown as InvoiceResponse);
+      } catch (e) {
+        if (mounted) {
+          toast.error(e instanceof Error ? e.message : "Failed to load invoice");
+          setInvoice(null);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      mounted = false;
+    };
+  }, [invoiceNo]);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading invoice...</div>
+      </div>
+    );
+  }
 
   if (!invoice) {
     return (
@@ -29,14 +75,9 @@ const ViewInvoice = () => {
     );
   }
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   return (
     <div className="min-h-screen bg-background py-8 px-4">
       <div className="max-w-5xl mx-auto">
-        {/* Toolbar */}
         <div className="mb-6 flex items-center justify-between gap-4 no-print">
           <Button variant="ghost" onClick={() => navigate("/")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -54,11 +95,13 @@ const ViewInvoice = () => {
           </div>
         </div>
 
-        {/* Invoice Container */}
         <div className="invoice-container">
           <InvoiceHeader
             company={invoice.company}
-            details={{ ...invoice.details, date: new Date(invoice.details.date) }}
+            details={{
+              ...invoice.details,
+              date: new Date(invoice.details.date),
+            }}
             onCompanyChange={() => {}}
             onDetailsChange={() => {}}
             editable={false}
@@ -83,11 +126,7 @@ const ViewInvoice = () => {
             </div>
           </div>
 
-          <ItemsTable
-            items={invoice.items}
-            onItemsChange={() => {}}
-            editable={false}
-          />
+          <ItemsTable items={invoice.items} onItemsChange={() => {}} editable={false} />
 
           <InvoiceSummary
             items={invoice.items}
@@ -105,3 +144,4 @@ const ViewInvoice = () => {
 };
 
 export default ViewInvoice;
+

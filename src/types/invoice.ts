@@ -59,6 +59,8 @@ export interface Company {
   gstin: string;
   state: string;
   stateCode: string;
+  logo?: string;
+
   // Bank Details
   bankName: string;
   accountNo: string;
@@ -108,6 +110,11 @@ export interface InvoiceItem {
   amount: number;
   discount: number;
   taxableValue: number;
+  /**
+   * User-entered GST % (required by UI/validation).
+   * If not provided, GST amounts will be treated as 0 (no implicit default like 18%).
+   */
+  gstPercent?: number;
   sgstRate: number;
   sgstAmount: number;
   cgstRate: number;
@@ -116,6 +123,7 @@ export interface InvoiceItem {
   igstAmount: number;
   total: number;
 }
+
 
 export interface InvoiceData {
   company: Company;

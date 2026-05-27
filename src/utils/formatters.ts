@@ -11,13 +11,24 @@ export const formatNumber = (num: number): string => {
   return new Intl.NumberFormat('en-IN').format(num);
 };
 
-export const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: '2-digit',
+export function formatDate(value?: string | number | Date | null): string {
+  if (value === undefined || value === null) return "N/A";
+
+  // Treat empty string as missing.
+  if (typeof value === "string" && value.trim() === "") return "N/A";
+
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+
+  if (Number.isNaN(time)) return "N/A";
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "2-digit",
   }).format(date);
-};
+}
+
 
 export const formatDateFull = (date: Date): string => {
   return new Intl.DateTimeFormat('en-IN', {

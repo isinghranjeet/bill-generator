@@ -1,80 +1,87 @@
-import { useState, useEffect } from "react";
-import { InvoiceData } from "@/types/invoice";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { InvoiceData } from "@/types/invoice";
+import { deleteInvoice, getInvoice, getInvoices, upsertInvoice } from "@/lib/invoiceApi";
 
-export interface SavedInvoice extends InvoiceData {
-  savedAt: string;
-  totalAmount: number;
-}
-
-const STORAGE_KEY = "saved_invoices";
+export type SavedInvoice = InvoiceData & { savedAt?: string };
 
 export const useInvoiceStorage = () => {
   const [invoices, setInvoices] = useState<SavedInvoice[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setInvoices(parsed);
-      } catch (e) {
-        console.error("Failed to parse stored invoices", e);
-      }
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getInvoices({ page: 1, limit: 100 });
+      setInvoices(data.items as SavedInvoice[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load invoices");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  const saveInvoice = (invoice: InvoiceData, totalAmount: number) => {
-    const savedInvoice: SavedInvoice = {
-      ...invoice,
-      savedAt: new Date().toISOString(),
-      totalAmount,
-    };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
-    // Check if invoice with same number exists
-    const existingIndex = invoices.findIndex(
-      (inv) => inv.details.invoiceNo === invoice.details.invoiceNo
-    );
+  const saveInvoice = useCallback(
+    async (invoice: InvoiceData) => {
+      const res = await upsertInvoice(invoice);
+      await refresh();
+      return res;
+    },
+    [refresh]
+  );
 
-    let updatedInvoices: SavedInvoice[];
-    if (existingIndex >= 0) {
-      updatedInvoices = [...invoices];
-      updatedInvoices[existingIndex] = savedInvoice;
-    } else {
-      updatedInvoices = [savedInvoice, ...invoices];
-    }
+  const deleteInvoiceByNo = useCallback(
+    async (invoiceNo: string) => {
+      await deleteInvoice(invoiceNo);
+      await refresh();
+    },
+    [refresh]
+  );
 
-    setInvoices(updatedInvoices);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedInvoices));
-    return savedInvoice;
-  };
+  const getInvoiceByNo = useCallback(
+    async (invoiceNo: string) => {
+      return getInvoice(invoiceNo);
+    },
+    []
+  );
 
-  const deleteInvoice = (invoiceNo: string) => {
-    const updatedInvoices = invoices.filter(
-      (inv) => inv.details.invoiceNo !== invoiceNo
-    );
-    setInvoices(updatedInvoices);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedInvoices));
-  };
+  const getInvoiceFromCache = useCallback(
+    (invoiceNo: string): SavedInvoice | undefined => {
+      return invoices.find((inv) => inv.details.invoiceNo === invoiceNo);
+    },
+    [invoices]
+  );
 
-  const getInvoice = (invoiceNo: string): SavedInvoice | undefined => {
-    return invoices.find((inv) => inv.details.invoiceNo === invoiceNo);
-  };
+  const searchInvoices = useCallback(
+    (query: string): SavedInvoice[] => {
+      const lowerQuery = query.toLowerCase();
+      return invoices.filter(
+        (inv) =>
+          inv.details.invoiceNo.toLowerCase().includes(lowerQuery) ||
+          inv.buyer.name.toLowerCase().includes(lowerQuery) ||
+          inv.consignee.name.toLowerCase().includes(lowerQuery)
+      );
+    },
+    [invoices]
+  );
 
-  const searchInvoices = (query: string): SavedInvoice[] => {
-    const lowerQuery = query.toLowerCase();
-    return invoices.filter(
-      (inv) =>
-        inv.details.invoiceNo.toLowerCase().includes(lowerQuery) ||
-        inv.buyer.name.toLowerCase().includes(lowerQuery) ||
-        inv.consignee.name.toLowerCase().includes(lowerQuery)
-    );
-  };
+  const apiState = useMemo(() => ({ loading, error }), [loading, error]);
 
   return {
     invoices,
     saveInvoice,
-    deleteInvoice,
-    getInvoice,
+    deleteInvoice: deleteInvoiceByNo,
+    getInvoice: getInvoiceFromCache,
+    getInvoiceRemote: getInvoiceByNo,
     searchInvoices,
+    apiState,
+    refresh,
   };
 };
+
+

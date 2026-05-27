@@ -19,23 +19,25 @@ export async function getInvoices(params?: {
   if (params?.page) url.searchParams.set("page", String(params.page));
   if (params?.limit) url.searchParams.set("limit", String(params.limit));
 
-  // apiFetch prefixes with API_BASE (which already includes /api)
-  return apiFetch<InvoicesListResponse>(`${url.pathname}${url.search}`);
+  // apiFetch prefixes with API_BASE
+  // Use backend route prefix: /api/invoices
+  return apiFetch<InvoicesListResponse>(`/api/invoices${url.search}`);
 }
 
 export async function getInvoice(invoiceNo: string) {
-  return apiFetch<InvoiceData>(`/invoices/${encodeURIComponent(invoiceNo)}`);
+  return apiFetch<InvoiceData>(`/api/invoices/${encodeURIComponent(invoiceNo)}`);
 }
 
 export async function upsertInvoice(payload: InvoiceData) {
-  return apiFetch<{ ok: true; invoiceNo: string }>("/invoices/", {
+  return apiFetch<{ ok: true; invoiceNo: string }>("/api/invoices/", {
     method: "POST",
     body: payload,
   });
 }
 
 export async function deleteInvoice(invoiceNo: string) {
-  return apiFetch<{ ok: true }>(`/invoices/${encodeURIComponent(invoiceNo)}`, {
+  return apiFetch<{ ok: true }>(`/api/invoices/${encodeURIComponent(invoiceNo)}`, {
     method: "DELETE",
   });
 }
+

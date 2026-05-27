@@ -32,13 +32,19 @@ export async function apiFetch<T = unknown>(
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
   // Prevent accidental double /api segments in the caller.
-  const cleanedPath = normalizedPath.replace(/^\/api\//, "/");
+  // Example: if caller passes `/api/invoices`, keep it as-is (do NOT strip `/api`).
+  // This repo expects the backend API to be mounted at `/api`.
+  const cleanedPath = normalizedPath;
+
+
 
   const url = `${API_BASE}${cleanedPath}`;
 
   console.log("[apiFetch]", { method, url });
 
   const res = await fetch(url, {
+
+
     method,
     headers: {
       "Content-Type": "application/json",

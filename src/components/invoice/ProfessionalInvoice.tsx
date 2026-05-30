@@ -38,7 +38,6 @@ export const ProfessionalInvoice = ({
   onRemarksChange,
 }: ProfessionalInvoiceProps) => {
   
-  // Calculate totals
   const totals = items.reduce(
     (acc, item) => ({
       taxableValue: acc.taxableValue + item.taxableValue,
@@ -55,7 +54,6 @@ export const ProfessionalInvoice = ({
   const handleAddItem = () => {
     if (!onItemsChange) return;
 
-    // Do NOT assume any GST default (e.g., 18% / 9+9).
     const newItem: InvoiceItem = {
       id: crypto.randomUUID(),
       srNo: items.length + 1,
@@ -68,7 +66,6 @@ export const ProfessionalInvoice = ({
       taxableValue: 0,
       gstPercent: undefined,
       discount: 0,
-
       sgstRate: 0,
       sgstAmount: 0,
       cgstRate: 0,
@@ -96,18 +93,15 @@ export const ProfessionalInvoice = ({
     const newItems = [...items];
     const item = { ...newItems[index], [field]: value };
     
-    // Recalculate
     const amount = item.rate * item.quantity;
     const taxableValue = amount;
     
     item.amount = parseFloat(amount.toFixed(2));
     item.taxableValue = parseFloat(taxableValue.toFixed(2));
     
-    // Calculate GST (simplified - always SGST+CGST for this format)
     const gstRate = typeof item.gstPercent === "number" ? item.gstPercent : undefined;
 
     if (gstRate === undefined) {
-      // No implicit GST default.
       item.sgstRate = 0;
       item.cgstRate = 0;
       item.sgstAmount = 0;
@@ -131,13 +125,10 @@ export const ProfessionalInvoice = ({
 
   return (
     <div className="bg-white p-6 print:p-0 w-[210mm] min-h-[297mm] mx-auto font-sans print:border-0 print:shadow-none print:overflow-visible">
-      {/* Single Header with Logo */}
       <div className="border-b-2 border-black pb-4 mb-4">
         <div className="flex justify-between items-start">
-          {/* Company Logo Section */}
           <div className="flex-1">
             <div className="flex items-start gap-3 mb-2">
-              {/* Logo Image */}
               {company.logo && (
                 <div className="logo-container">
                   <img 
@@ -148,7 +139,6 @@ export const ProfessionalInvoice = ({
                 </div>
               )}
               
-              {/* Company Text Details */}
               <div className="flex-1">
                 <div className="company-name-section">
                   <h1 className="text-3xl font-black text-blue-900 tracking-wider mb-1">
@@ -174,22 +164,51 @@ export const ProfessionalInvoice = ({
             </div>
           </div>
           
-          {/* Invoice Details */}
           <div className="border-l pl-3 ml-3">
-            <h2 className="text-xl font-bold text-center mb-3 text-blue-800">TAX INVOICE</h2>
+            <div className="mb-3">
+              {editable && onDetailsChange ? (
+                <Input
+                  value={details.invoiceTitle || ""}
+                  onChange={(e) =>
+                    onDetailsChange({
+                      ...details,
+                      invoiceTitle: e.target.value,
+                    })
+                  }
+                  placeholder="TAX INVOICE"
+                  className="h-8 text-center text-xl font-bold text-blue-800"
+                />
+              ) : (
+                <h2 className="text-xl font-bold text-center text-blue-800">
+                  {details.invoiceTitle?.trim() || "TAX INVOICE"}
+                </h2>
+              )}
+            </div>
+
             <div className="space-y-1">
               <div className="grid grid-cols-2 gap-1 items-center">
-                <span className="font-semibold text-xs">Invoice No:</span>
+                {editable && onDetailsChange ? (
+                  <Input
+                    value={details.invoiceNoLabel || "Invoice No"}
+                    onChange={(e) => onDetailsChange({...details, invoiceNoLabel: e.target.value})}
+                    className="h-6 text-xs font-semibold w-full"
+                    placeholder="Label name"
+                  />
+                ) : (
+                  <span className="font-semibold text-xs">{details.invoiceNoLabel || "Invoice No"}:</span>
+                )}
                 {editable && onDetailsChange ? (
                   <Input
                     value={details.invoiceNo}
                     onChange={(e) => onDetailsChange({...details, invoiceNo: e.target.value})}
                     className="h-6 text-xs w-full"
+                    placeholder="Enter number"
                   />
                 ) : (
                   <span className="font-medium text-xs">{details.invoiceNo}</span>
                 )}
               </div>
+              
               <div className="grid grid-cols-2 gap-1 items-center">
                 <span className="font-semibold text-xs">Date:</span>
                 {editable && onDetailsChange ? (
@@ -203,6 +222,7 @@ export const ProfessionalInvoice = ({
                   <span className="text-xs">{format(details.date, 'dd/MM/yyyy')}</span>
                 )}
               </div>
+              
               <div className="grid grid-cols-2 gap-1 items-center">
                 <span className="font-semibold text-xs">Payment Terms:</span>
                 {editable && onDetailsChange ? (
@@ -220,10 +240,8 @@ export const ProfessionalInvoice = ({
         </div>
       </div>
 
-      {/* Buyer & Consignee Section */}
       <div className="mb-4 border-b border-gray-300 pb-3">
         <div className="grid grid-cols-2 gap-4">
-          {/* Buyer Section */}
           <div>
             <h3 className="font-bold text-xs mb-1 text-blue-700">BILL TO</h3>
             <div className="border border-gray-300 p-2 rounded">
@@ -280,7 +298,6 @@ export const ProfessionalInvoice = ({
             </div>
           </div>
 
-          {/* Consignee Section */}
           <div>
             <h3 className="font-bold text-xs mb-1 text-blue-700">SHIP TO</h3>
             <div className="border border-gray-300 p-2 rounded">
@@ -339,7 +356,6 @@ export const ProfessionalInvoice = ({
         </div>
       </div>
 
-      {/* Items Table */}
       <div className="mb-4">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-xs">
@@ -454,7 +470,6 @@ export const ProfessionalInvoice = ({
                           value={typeof item.gstPercent === 'number' ? item.gstPercent : ''}
                           onChange={(e) => {
                             const raw = e.target.value;
-                            // If user clears the field, remove value (no default like 18%).
                             const next = raw === '' ? undefined : parseFloat(raw);
                             updateItem(index, 'gstPercent', next);
                           }}
@@ -493,7 +508,6 @@ export const ProfessionalInvoice = ({
                 </tr>
               ))}
               
-              {/* Totals Row */}
               <tr className="bg-gray-50 font-bold">
                 <td colSpan={5} className="border border-gray-300 p-1 text-right pr-2">
                   <span className="text-xs">Total:</span>
@@ -515,7 +529,6 @@ export const ProfessionalInvoice = ({
           </table>
         </div>
         
-        {/* Add Item Button */}
         {editable && (
           <Button
             type="button"
@@ -530,10 +543,8 @@ export const ProfessionalInvoice = ({
         )}
       </div>
 
-      {/* Bottom Section */}
       <div className="mb-3">
         <div className="grid grid-cols-2 gap-4">
-          {/* Left: Bank Details */}
           <div>
             <h4 className="font-bold text-xs mb-1 text-blue-700">BANK DETAILS</h4>
             <div className="border border-gray-300 p-2 rounded bg-gray-50">
@@ -605,7 +616,6 @@ export const ProfessionalInvoice = ({
             </div>
           </div>
 
-          {/* Right: Amount Summary */}
           <div>
             <h4 className="font-bold text-xs mb-1 text-blue-700">AMOUNT SUMMARY</h4>
             <div className="border border-gray-300 rounded overflow-hidden mb-3">
@@ -617,7 +627,7 @@ export const ProfessionalInvoice = ({
                       ₹{totals.taxableValue.toFixed(2)}
                     </td>
                   </tr>
-                  <tr>
+                  <tr className="border-b border-gray-300">
                     <td className="p-2 font-semibold">GST ({typeof items[0]?.gstPercent === 'number' ? `${items[0]!.gstPercent}%` : '-'}):</td>
                     <td className="p-2 text-right font-bold">
                       ₹{totals.gstAmount.toFixed(2)}
@@ -633,7 +643,6 @@ export const ProfessionalInvoice = ({
               </table>
             </div>
             
-            {/* Amount in Words */}
             <div>
               <p className="font-semibold text-xs mb-1 text-blue-700">AMOUNT IN WORDS</p>
               <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs italic">
@@ -644,7 +653,6 @@ export const ProfessionalInvoice = ({
         </div>
       </div>
 
-      {/* Remarks */}
       <div className="mb-4">
         <div>
           <p className="font-semibold text-xs mb-1 text-blue-700">REMARKS</p>
@@ -669,7 +677,6 @@ export const ProfessionalInvoice = ({
         </div>
       </div>
 
-      {/* Signatures */}
       <div className="pt-3 border-t-2 border-black">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -695,7 +702,6 @@ export const ProfessionalInvoice = ({
   );
 };
 
-// Number to words conversion
 function convertToWords(num: number): string {
   if (num === 0) return "Zero Rupees Only";
   

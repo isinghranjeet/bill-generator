@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { useInvoiceOfflineCache } from "@/hooks/useInvoiceOfflineCache";
+
 import { useNavigate } from "react-router-dom";
 import { useInvoiceStorage, SavedInvoice } from "@/hooks/useInvoiceStorage";
 import { formatCurrency, formatDate } from "@/utils/formatters";
@@ -32,6 +34,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+
+
+
 import {
   Plus,
   Search,
@@ -65,6 +70,15 @@ type FilterPeriod = "all" | "today" | "week" | "month" | "quarter" | "year";
 const AdminPortal = () => {
   const navigate = useNavigate();
   const { invoices, deleteInvoice, apiState } = useInvoiceStorage();
+
+  // Offline-first: show cached invoice list immediately
+  // (useInvoiceStorage still owns `invoices`; offline cached UI is driven by the SW + localStorage/IDB-backed cache.)
+  useInvoiceOfflineCache({
+    setInvoices: undefined,
+  });
+
+
+
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
@@ -211,6 +225,7 @@ const AdminPortal = () => {
   };
 
   const handleSort = (field: SortField) => {
+
     if (sortField === field) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -231,8 +246,11 @@ const AdminPortal = () => {
 
   return (
     <div className="min-h-screen bg-background">
+
+
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-10">
+
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-lg flex items-center justify-center shadow-md">
@@ -244,17 +262,22 @@ const AdminPortal = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={handleExport}>
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Button onClick={() => navigate("/create")} className="shadow-sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New Invoice
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={handleExport}>
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+              <Button onClick={() => navigate("/create")} className="shadow-sm">
+                <Plus className="h-4 w-4 mr-2" />
+                New Invoice
+              </Button>
+            </div>
+
+
           </div>
         </div>
       </header>
+
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         {/* Stats Cards */}
@@ -493,13 +516,11 @@ const AdminPortal = () => {
                       console.log("invoice row", invoice);
 
                       const safeDateValue =
-                        invoice?.createdAt ??
                         // Backend may store the invoice date under details.date
+                        (invoice as unknown as { createdAt?: unknown }).createdAt ??
                         invoice?.details?.date ??
-                        // optional alias if backend uses different field name
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        (invoice as any)?.invoiceDate ??
                         null;
+
 
                       const invDate = safeDateValue ? new Date(safeDateValue) : new Date(NaN);
                       const isRecent =
@@ -586,6 +607,7 @@ const AdminPortal = () => {
                                     <MoreVertical className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
+                                
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuLabel>Actions</DropdownMenuLabel>
                                   <DropdownMenuItem onClick={() => navigate(`/view/${invoice.details.invoiceNo}`)}>

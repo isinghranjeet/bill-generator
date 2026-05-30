@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { InvoiceData } from "@/types/invoice";
 import { generateInvoiceNumber } from "@/utils/calculations";
 import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
+import { putInvoice, putInvoicesList } from "@/lib/invoiceCache";
+
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Download, Save, RotateCcw, Eye, Edit, Upload } from "lucide-react";
@@ -42,6 +44,7 @@ const defaultInvoiceData: InvoiceData = {
     placeOfSupply: "",
   },
   details: {
+    invoiceTitle: "TAX INVOICE",
     invoiceNo: generateInvoiceNumber(),
     date: new Date(),
     deliveryNote: "",
@@ -85,7 +88,8 @@ const defaultInvoiceData: InvoiceData = {
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
-  const { saveInvoice, apiState } = useInvoiceStorage();
+  const { saveInvoice, apiState, getInvoiceRemote } = useInvoiceStorage();
+
 
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(defaultInvoiceData);
   const [editable, setEditable] = useState(true);
@@ -172,8 +176,10 @@ const CreateInvoice = () => {
     try {
       toast.loading("Saving invoice...");
       await saveInvoice(invoiceToSave);
+      putInvoice(invoiceToSave);
       toast.success("Invoice saved successfully!");
       setEditable(false);
+
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save invoice");
     }

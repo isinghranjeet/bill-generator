@@ -82,6 +82,7 @@ export interface Party {
 }
 
 export interface InvoiceDetails {
+  invoiceTitle?: string;
   invoiceNo: string;
   date: Date;
   dueDate?: Date;
@@ -98,6 +99,7 @@ export interface InvoiceDetails {
   termsOfDelivery: string;
   ewayBillNo?: string;
 }
+
 
 export interface InvoiceItem {
   id: string;

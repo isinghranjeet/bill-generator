@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Download } from "lucide-react";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
 import type { InvoiceData } from "@/types/invoice";
+import { getCachedInvoice } from "@/lib/invoiceCache";
+
 
 type InvoiceResponse = InvoiceData & { _id?: string };
 
@@ -29,18 +31,29 @@ const ViewInvoice = () => {
         return;
       }
 
+      // Offline-first: show cached invoice immediately if available
+      const cached = getCachedInvoice(decodeURIComponent(invoiceNo));
+      if (mounted && cached) {
+        setInvoice(cached as unknown as InvoiceResponse);
+        setLoading(false);
+      }
+
       try {
         setLoading(true);
         const res = await getInvoiceApi(decodeURIComponent(invoiceNo));
-        if (mounted) setInvoice(res as unknown as InvoiceResponse);
+        if (mounted) {
+          setInvoice(res as unknown as InvoiceResponse);
+        }
       } catch (e) {
         if (mounted) {
           toast.error(e instanceof Error ? e.message : "Failed to load invoice");
-          setInvoice(null);
+          // keep cached view if we have it
+          if (!cached) setInvoice(null);
         }
       } finally {
         if (mounted) setLoading(false);
       }
+
     };
 
     run();
@@ -100,6 +113,7 @@ const ViewInvoice = () => {
             company={invoice.company}
             details={{
               ...invoice.details,
+              invoiceTitle: invoice.details.invoiceTitle ?? "TAX INVOICE",
               date: new Date(invoice.details.date),
             }}
             onCompanyChange={() => {}}

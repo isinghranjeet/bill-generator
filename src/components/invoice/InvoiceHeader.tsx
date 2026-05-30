@@ -1,14 +1,18 @@
-import { CompanyDetails, InvoiceDetails } from "@/types/invoice";
+import { InvoiceDetails } from "@/types/invoice";
+import type { Company } from "@/types/invoice";
+
 import { formatDate } from "@/utils/formatters";
 import { Input } from "@/components/ui/input";
 
+
 interface InvoiceHeaderProps {
-  company: CompanyDetails;
+  company: Company;
   details: InvoiceDetails;
-  onCompanyChange: (company: CompanyDetails) => void;
+  onCompanyChange: (company: Company) => void;
   onDetailsChange: (details: InvoiceDetails) => void;
   editable?: boolean;
 }
+
 
 export const InvoiceHeader = ({
   company,
@@ -25,8 +29,25 @@ export const InvoiceHeader = ({
     <div className="border-b border-border">
       {/* Title */}
       <div className="bg-primary text-primary-foreground text-center py-3">
-        <h1 className="text-xl font-bold tracking-wide">Tax Invoice</h1>
+        {editable ? (
+          <Input
+            value={details.invoiceTitle ?? "TAX INVOICE"}
+            onChange={(e) =>
+              onDetailsChange({
+                ...details,
+                invoiceTitle: e.target.value ?? "",
+              })
+            }
+            className="text-xl font-bold tracking-wide text-center border-primary-foreground bg-transparent"
+            readOnly={!editable}
+          />
+        ) : (
+          <h1 className="text-xl font-bold tracking-wide">
+            {details.invoiceTitle ?? "TAX INVOICE"}
+          </h1>
+        )}
       </div>
+
 
       {/* Company & Invoice Details Grid */}
       <div className="grid grid-cols-3 border-b border-border">
@@ -80,7 +101,7 @@ export const InvoiceHeader = ({
         {/* Invoice Details - Right Columns */}
         <div className="col-span-2 grid grid-cols-2">
           <div className="border-r border-b border-border p-2">
-            <div className="invoice-section-title">Invoice No.</div>
+            <div className="invoice-section-title"> No.</div>
             <Input
               value={details.invoiceNo}
               onChange={(e) => onDetailsChange({ ...details, invoiceNo: e.target.value })}
@@ -98,18 +119,19 @@ export const InvoiceHeader = ({
           <div className="border-b border-border p-2">
             <div className="invoice-section-title">Mode/Terms of Payment</div>
             <Input
-              value={details.paymentTerms}
-              onChange={(e) => onDetailsChange({ ...details, paymentTerms: e.target.value })}
+              value={details.modeOfPayment}
+              onChange={(e) => onDetailsChange({ ...details, modeOfPayment: e.target.value })}
               className={inputClass}
               placeholder=""
               readOnly={!editable}
             />
+
           </div>
 
          
          
           <div className="border-b border-border p-2">
-            <div className="invoice-section-title">Dated</div>
+            <div className="invoice-section-title">Buyer Order Date</div>
             <Input
               value={details.buyerOrderDate}
               onChange={(e) => onDetailsChange({ ...details, buyerOrderDate: e.target.value })}
@@ -117,6 +139,7 @@ export const InvoiceHeader = ({
               placeholder=""
               readOnly={!editable}
             />
+
           </div>
 
           

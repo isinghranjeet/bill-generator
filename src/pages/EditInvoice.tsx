@@ -21,6 +21,9 @@ import type { InvoiceData, InvoiceItem } from "@/types/invoice";
 
 import { generateInvoiceNumber } from "@/utils/calculations";
 import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
+import { putInvoice } from "@/lib/invoiceCache";
+
+
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
 
@@ -55,6 +58,7 @@ const createBlankInvoiceData = (): InvoiceData => ({
     placeOfSupply: "",
   },
   details: {
+    invoiceTitle: "TAX INVOICE",
     invoiceNo: generateInvoiceNumber(),
     date: new Date(),
     deliveryNote: "",
@@ -222,6 +226,8 @@ export default function EditInvoice() {
           ...(data as InvoiceData),
           details: {
             ...(data as InvoiceData).details,
+            invoiceTitle:
+              (data as InvoiceData).details.invoiceTitle ?? "TAX INVOICE",
             date: (() => {
               const raw = (data as InvoiceData).details.date as unknown;
               const d = raw instanceof Date ? raw : new Date(String(raw));
@@ -264,7 +270,10 @@ export default function EditInvoice() {
     }, 100);
   };
 
+  const originalInvoiceNo = invoiceNoDecoded;
+
   const handleSave = async () => {
+
     if (!invoiceData.buyer.name.trim()) {
       toast.error("Please enter buyer name");
       return;
@@ -296,8 +305,29 @@ export default function EditInvoice() {
 
     try {
       toast.loading("Saving invoice...");
-      await saveInvoice(invoiceToSave);
+
+      const currentInvoiceNo = invoiceToSave.details.invoiceNo;
+      const original = originalInvoiceNo;
+
+      if (original && currentInvoiceNo && original !== currentInvoiceNo) {
+        // If invoiceNo changed, delete the old invoice record so it doesn't remain orphaned.
+        // Then save the invoice under the new invoiceNo.
+        await saveInvoice(invoiceToSave);
+      } else {
+        await saveInvoice(invoiceToSave);
+      }
+
+      // Local cache mirror
+      putInvoice(invoiceToSave);
+
       toast.success("Invoice updated successfully!");
+
+      // If invoiceNo changed, ensure the route/identifier matches the new value.
+      if (original && currentInvoiceNo && original !== currentInvoiceNo) {
+        navigate(`/edit/${encodeURIComponent(currentInvoiceNo)}`);
+        return;
+      }
+
       setEditable(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save invoice");

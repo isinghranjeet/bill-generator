@@ -1,3 +1,4 @@
+import React, { useMemo, useCallback } from 'react';
 import { Company, Party, InvoiceDetails, InvoiceItem } from "@/types/invoice";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ interface ProfessionalInvoiceProps {
   onRemarksChange?: (remarks: string) => void;
 }
 
-export const ProfessionalInvoice = ({
+export const ProfessionalInvoice = React.memo(({
   company,
   consignee,
   buyer,
@@ -38,20 +39,24 @@ export const ProfessionalInvoice = ({
   onRemarksChange,
 }: ProfessionalInvoiceProps) => {
   
-  const totals = items.reduce(
-    (acc, item) => ({
-      taxableValue: acc.taxableValue + item.taxableValue,
-      gstAmount: acc.gstAmount + (item.sgstAmount + item.cgstAmount + item.igstAmount),
-      total: acc.total + item.total,
-    }),
-    {
-      taxableValue: 0,
-      gstAmount: 0,
-      total: 0,
-    }
-  );
+  // Memoize totals calculation for performance
+  const totals = useMemo(() => {
+    return items.reduce(
+      (acc, item) => ({
+        taxableValue: acc.taxableValue + item.taxableValue,
+        gstAmount: acc.gstAmount + (item.sgstAmount + item.cgstAmount + item.igstAmount),
+        total: acc.total + item.total,
+      }),
+      {
+        taxableValue: 0,
+        gstAmount: 0,
+        total: 0,
+      }
+    );
+  }, [items]);
 
-  const handleAddItem = () => {
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleAddItem = useCallback(() => {
     if (!onItemsChange) return;
 
     const newItem: InvoiceItem = {
@@ -76,29 +81,31 @@ export const ProfessionalInvoice = ({
     };
 
     onItemsChange([...items, newItem]);
-  };
+  }, [items, onItemsChange]);
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = useCallback((id: string) => {
     if (!onItemsChange) return;
     
     const newItems = items.filter(item => item.id !== id)
       .map((item, index) => ({ ...item, srNo: index + 1 }));
     
     onItemsChange(newItems);
-  };
+  }, [items, onItemsChange]);
 
-  const updateItem = (index: number, field: keyof InvoiceItem, value: unknown) => {
+  const updateItem = useCallback((index: number, field: keyof InvoiceItem, value: unknown) => {
     if (!onItemsChange) return;
     
     const newItems = [...items];
     const item = { ...newItems[index], [field]: value };
     
+    // Recalculate amounts
     const amount = item.rate * item.quantity;
     const taxableValue = amount;
     
     item.amount = parseFloat(amount.toFixed(2));
     item.taxableValue = parseFloat(taxableValue.toFixed(2));
     
+    // Calculate GST
     const gstRate = typeof item.gstPercent === "number" ? item.gstPercent : undefined;
 
     if (gstRate === undefined) {
@@ -121,162 +128,317 @@ export const ProfessionalInvoice = ({
 
     newItems[index] = item;
     onItemsChange(newItems);
-  };
+  }, [items, onItemsChange]);
+
+  // Render item row
+  const renderItemRow = useCallback((item: InvoiceItem, index: number) => (
+    <tr key={item.id} className="print:break-inside-avoid">
+      <td className="border border-gray-300 p-1 text-center">{item.srNo}</td>
+      
+      {/* Description */}
+      <td className="border border-gray-300 p-1">
+        {editable ? (
+          <div className="print:hidden">
+            <Input
+              value={item.description}
+              onChange={(e) => updateItem(index, 'description', e.target.value)}
+              className="h-5 text-xs w-full"
+              placeholder="Item description"
+            />
+          </div>
+        ) : null}
+        <span className={editable ? "hidden print:block text-xs" : "text-xs"}>
+          {item.description || "-"}
+        </span>
+      </td>
+      
+      {/* HSN */}
+      <td className="border border-gray-300 p-1">
+        {editable ? (
+          <div className="print:hidden">
+            <Input
+              value={item.hsn}
+              onChange={(e) => updateItem(index, 'hsn', e.target.value)}
+              className="h-5 text-xs text-center w-full"
+              placeholder="HSN Code"
+            />
+          </div>
+        ) : null}
+        <span className={editable ? "hidden print:block text-center text-xs" : "block text-center text-xs"}>
+          {item.hsn || "-"}
+        </span>
+      </td>
+      
+      {/* Rate */}
+      <td className="border border-gray-300 p-1">
+        {editable ? (
+          <div className="print:hidden">
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              value={item.rate}
+              onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
+              className="h-5 text-xs text-right w-full"
+              placeholder="0.00"
+            />
+          </div>
+        ) : null}
+        <span className={editable ? "hidden print:block text-right text-xs font-medium" : "block text-right text-xs font-medium"}>
+          {item.rate.toFixed(2)}
+        </span>
+      </td>
+      
+      {/* Quantity - FIXED: Only shows once in print */}
+      <td className="border border-gray-300 p-1">
+        {editable ? (
+          <div className="print:hidden">
+            <Input
+              type="number"
+              min="0"
+              step="1"
+              value={item.quantity}
+              onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+              className="h-5 text-xs text-center w-full"
+              placeholder="1"
+            />
+          </div>
+        ) : null}
+        <span className={editable ? "hidden print:block text-center text-xs font-medium" : "block text-center text-xs font-medium"}>
+          {item.quantity}
+        </span>
+      </td>
+      
+      {/* Taxable Value */}
+      <td className="border border-gray-300 p-1 text-right">
+        <span className="text-xs font-semibold">
+          {item.taxableValue.toFixed(2)}
+        </span>
+      </td>
+      
+      {/* GST% */}
+      <td className="border border-gray-300 p-1">
+        {editable ? (
+          <div className="print:hidden">
+            <Input
+              type="number"
+              min="0"
+              max="28"
+              step="0.01"
+              value={typeof item.gstPercent === 'number' ? item.gstPercent : ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const next = raw === '' ? undefined : parseFloat(raw);
+                updateItem(index, 'gstPercent', next);
+              }}
+              className="h-5 text-xs text-center w-full"
+              placeholder="18"
+            />
+          </div>
+        ) : null}
+        <span className={editable ? "hidden print:block text-center text-xs font-medium" : "block text-center text-xs font-medium"}>
+          {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
+        </span>
+      </td>
+      
+      {/* Amount */}
+      <td className="border border-gray-300 p-1 text-right">
+        <span className="text-xs font-bold text-blue-700">
+          {item.total.toFixed(2)}
+        </span>
+      </td>
+      
+      {/* Action */}
+      {editable && (
+        <td className="border border-gray-300 p-1 text-center print:hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDeleteItem(item.id)}
+            className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+            title="Delete item"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </td>
+      )}
+    </tr>
+  ), [editable, updateItem, handleDeleteItem]);
 
   return (
-    <div className="bg-white p-6 print:p-0 w-[210mm] min-h-[297mm] mx-auto font-sans print:border-0 print:shadow-none print:overflow-visible">
-      <div className="border-b-2 border-black pb-4 mb-4">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <div className="flex items-start gap-3 mb-2">
-              {company.logo && (
-                <div className="logo-container">
-                  <img 
-                    src={company.logo} 
-                    alt={`${company.name} Logo`}
-                    className="h-16 w-auto object-contain"
-                  />
-                </div>
-              )}
-              
-              <div className="flex-1">
-                <div className="company-name-section">
-                  <h1 className="text-3xl font-black text-blue-900 tracking-wider mb-1">
-                    {company.name || "RENT MY EVENT"}
-                  </h1>
-                  <div className="text-sm font-medium text-blue-600 uppercase tracking-widest mb-2">
-                    Style Your Moment
+    <div className="bg-white p-6 print:p-0 w-[210mm] print:w-full min-h-[297mm] print:min-h-auto mx-auto font-sans print:border-0 print:shadow-none print:overflow-visible">
+      
+      {/* ===== HEADER SECTION ===== */}
+      <div className="print:break-inside-avoid print:page-break-inside-avoid">
+        <div className="border-b-2 border-black pb-4 mb-4">
+          <div className="flex justify-between items-start">
+            {/* Company Details */}
+            <div className="flex-1">
+              <div className="flex items-start gap-3 mb-2">
+                {company.logo && (
+                  <div className="print:max-h-[60px]">
+                    <img 
+                      src={company.logo} 
+                      alt={`${company.name} Logo`}
+                      className="h-16 w-auto object-contain print:max-h-[60px]"
+                    />
                   </div>
+                )}
+                
+                <div className="flex-1 print:break-inside-avoid">
+                  <div className="print:break-inside-avoid">
+                    <h1 className="text-3xl font-black text-blue-900 tracking-wider mb-1">
+                      {company.name || "RENT MY EVENT"}
+                    </h1>
+                    <div className="text-sm font-medium text-blue-600 uppercase tracking-widest mb-2">
+                      Style Your Moment
+                    </div>
+                  </div>
+                  
+                  <div className="text-xs text-gray-600 space-y-0.5">
+                    <p className="font-medium">{company.address}</p>
+                    <div className="grid grid-cols-2 gap-1">
+                      <p><span className="font-semibold">GSTIN:</span> {company.gstin}</p>
+                      <p><span className="font-semibold">State:</span> {company.state} ({company.stateCode})</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      <p><span className="font-semibold">Mobile:</span> {company.mobile || "Not provided"}</p>
+                      <p><span className="font-semibold">Email:</span> {company.email || "Not provided"}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Invoice Details */}
+            <div className="border-l pl-3 ml-3">
+              <div className="mb-3">
+                {editable && onDetailsChange ? (
+                  <Input
+                    value={details.invoiceTitle || ""}
+                    onChange={(e) =>
+                      onDetailsChange({
+                        ...details,
+                        invoiceTitle: e.target.value,
+                      })
+                    }
+                    placeholder="TAX INVOICE"
+                    className="h-8 text-center text-xl font-bold text-blue-800"
+                  />
+                ) : (
+                  <h2 className="text-xl font-bold text-center text-blue-800">
+                    {details.invoiceTitle?.trim() || "TAX INVOICE"}
+                  </h2>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <div className="grid grid-cols-2 gap-1 items-center">
+                  {editable && onDetailsChange ? (
+                    <Input
+                      value={details.invoiceNoLabel || "Invoice No"}
+                      onChange={(e) => onDetailsChange({...details, invoiceNoLabel: e.target.value})}
+                      className="h-6 text-xs font-semibold w-full"
+                      placeholder="Label name"
+                    />
+                  ) : (
+                    <span className="font-semibold text-xs">{details.invoiceNoLabel || "Invoice No"}:</span>
+                  )}
+                  {editable && onDetailsChange ? (
+                    <Input
+                      value={details.invoiceNo}
+                      onChange={(e) => onDetailsChange({...details, invoiceNo: e.target.value})}
+                      className="h-6 text-xs w-full"
+                      placeholder="Enter number"
+                    />
+                  ) : (
+                    <span className="font-medium text-xs">{details.invoiceNo}</span>
+                  )}
                 </div>
                 
-                <div className="text-xs text-gray-600 space-y-0.5">
-                  <p className="font-medium">{company.address}</p>
-                  <div className="grid grid-cols-2 gap-1">
-                    <p><span className="font-semibold">GSTIN:</span> {company.gstin}</p>
-                    <p><span className="font-semibold">State:</span> {company.state} ({company.stateCode})</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1">
-                    <p><span className="font-semibold">Mobile:</span> {company.mobile || "Not provided"}</p>
-                    <p><span className="font-semibold">Email:</span> {company.email || "Not provided"}</p>
-                  </div>
+                <div className="grid grid-cols-2 gap-1 items-center">
+                  <span className="font-semibold text-xs">Date:</span>
+                  {editable && onDetailsChange ? (
+                    <Input
+                      type="date"
+                      value={format(details.date, 'yyyy-MM-dd')}
+                      onChange={(e) => onDetailsChange({...details, date: new Date(e.target.value)})}
+                      className="h-6 text-xs w-full"
+                    />
+                  ) : (
+                    <span className="text-xs">{format(details.date, 'dd/MM/yyyy')}</span>
+                  )}
                 </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="border-l pl-3 ml-3">
-            <div className="mb-3">
-              {editable && onDetailsChange ? (
-                <Input
-                  value={details.invoiceTitle || ""}
-                  onChange={(e) =>
-                    onDetailsChange({
-                      ...details,
-                      invoiceTitle: e.target.value,
-                    })
-                  }
-                  placeholder="TAX INVOICE"
-                  className="h-8 text-center text-xl font-bold text-blue-800"
-                />
-              ) : (
-                <h2 className="text-xl font-bold text-center text-blue-800">
-                  {details.invoiceTitle?.trim() || "TAX INVOICE"}
-                </h2>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <div className="grid grid-cols-2 gap-1 items-center">
-                {editable && onDetailsChange ? (
-                  <Input
-                    value={details.invoiceNoLabel || "Invoice No"}
-                    onChange={(e) => onDetailsChange({...details, invoiceNoLabel: e.target.value})}
-                    className="h-6 text-xs font-semibold w-full"
-                    placeholder="Label name"
-                  />
-                ) : (
-                  <span className="font-semibold text-xs">{details.invoiceNoLabel || "Invoice No"}:</span>
-                )}
-                {editable && onDetailsChange ? (
-                  <Input
-                    value={details.invoiceNo}
-                    onChange={(e) => onDetailsChange({...details, invoiceNo: e.target.value})}
-                    className="h-6 text-xs w-full"
-                    placeholder="Enter number"
-                  />
-                ) : (
-                  <span className="font-medium text-xs">{details.invoiceNo}</span>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-1 items-center">
-                <span className="font-semibold text-xs">Date:</span>
-                {editable && onDetailsChange ? (
-                  <Input
-                    type="date"
-                    value={format(details.date, 'yyyy-MM-dd')}
-                    onChange={(e) => onDetailsChange({...details, date: new Date(e.target.value)})}
-                    className="h-6 text-xs w-full"
-                  />
-                ) : (
-                  <span className="text-xs">{format(details.date, 'dd/MM/yyyy')}</span>
-                )}
-              </div>
-              
-              <div className="grid grid-cols-2 gap-1 items-center">
-                <span className="font-semibold text-xs">Payment Terms:</span>
-                {editable && onDetailsChange ? (
-                  <Input
-                    value={details.modeOfPayment}
-                    onChange={(e) => onDetailsChange({...details, modeOfPayment: e.target.value})}
-                    className="h-6 text-xs w-full"
-                  />
-                ) : (
-                  <span className="text-xs">{details.modeOfPayment || "-"}</span>
-                )}
+                
+                <div className="grid grid-cols-2 gap-1 items-center">
+                  <span className="font-semibold text-xs">Payment Terms:</span>
+                  {editable && onDetailsChange ? (
+                    <Input
+                      value={details.modeOfPayment}
+                      onChange={(e) => onDetailsChange({...details, modeOfPayment: e.target.value})}
+                      className="h-6 text-xs w-full"
+                    />
+                  ) : (
+                    <span className="text-xs">{details.modeOfPayment || "-"}</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mb-4 border-b border-gray-300 pb-3">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <h3 className="font-bold text-xs mb-1 text-blue-700">BILL TO</h3>
-            <div className="border border-gray-300 p-2 rounded">
-              {editable && onBuyerChange ? (
-                <>
-                  <div className="space-y-1 print:hidden">
-                    <Input
-                      value={buyer.name}
-                      onChange={(e) => onBuyerChange({...buyer, name: e.target.value})}
-                      placeholder="Buyer Name"
-                      className="h-6 text-xs w-full"
-                    />
-                    <Textarea
-                      value={buyer.address}
-                      onChange={(e) => onBuyerChange({...buyer, address: e.target.value})}
-                      placeholder="Address"
-                      className="h-14 text-xs w-full"
-                      rows={2}
-                    />
-                    <div className="grid grid-cols-2 gap-1">
+      {/* ===== PARTY SECTION ===== */}
+      <div className="print:break-inside-avoid print:page-break-inside-avoid">
+        <div className="mb-4 border-b border-gray-300 pb-3">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Buyer Section */}
+            <div>
+              <h3 className="font-bold text-xs mb-1 text-blue-700">BILL TO</h3>
+              <div className="border border-gray-300 p-2 rounded">
+                {editable && onBuyerChange ? (
+                  <>
+                    <div className="space-y-1 print:hidden">
                       <Input
-                        value={buyer.gstin}
-                        onChange={(e) => onBuyerChange({...buyer, gstin: e.target.value})}
-                        placeholder="GSTIN"
-                        className="h-6 text-xs"
+                        value={buyer.name}
+                        onChange={(e) => onBuyerChange({...buyer, name: e.target.value})}
+                        placeholder="Buyer Name"
+                        className="h-6 text-xs w-full"
                       />
-                      <Input
-                        value={buyer.state}
-                        onChange={(e) => onBuyerChange({...buyer, state: e.target.value})}
-                        placeholder="State"
-                        className="h-6 text-xs"
+                      <Textarea
+                        value={buyer.address}
+                        onChange={(e) => onBuyerChange({...buyer, address: e.target.value})}
+                        placeholder="Address"
+                        className="h-14 text-xs w-full"
+                        rows={2}
                       />
+                      <div className="grid grid-cols-2 gap-1">
+                        <Input
+                          value={buyer.gstin}
+                          onChange={(e) => onBuyerChange({...buyer, gstin: e.target.value})}
+                          placeholder="GSTIN"
+                          className="h-6 text-xs"
+                        />
+                        <Input
+                          value={buyer.state}
+                          onChange={(e) => onBuyerChange({...buyer, state: e.target.value})}
+                          placeholder="State"
+                          className="h-6 text-xs"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="hidden print:block text-xs space-y-0.5">
+                    <div className="hidden print:block text-xs space-y-0.5">
+                      <p className="font-semibold">{buyer.name || "Not provided"}</p>
+                      <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
+                      <div className="grid grid-cols-2 gap-1 mt-1">
+                        <p><span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}</p>
+                        <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs space-y-0.5">
                     <p className="font-semibold">{buyer.name || "Not provided"}</p>
                     <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
                     <div className="grid grid-cols-2 gap-1 mt-1">
@@ -284,55 +446,56 @@ export const ProfessionalInvoice = ({
                       <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
                     </div>
                   </div>
-                </>
-              ) : (
-                <div className="text-xs space-y-0.5">
-                  <p className="font-semibold">{buyer.name || "Not provided"}</p>
-                  <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
-                  <div className="grid grid-cols-2 gap-1 mt-1">
-                    <p><span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}</p>
-                    <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <h3 className="font-bold text-xs mb-1 text-blue-700">SHIP TO</h3>
-            <div className="border border-gray-300 p-2 rounded">
-              {editable && onConsigneeChange ? (
-                <>
-                  <div className="space-y-1 print:hidden">
-                    <Input
-                      value={consignee.name}
-                      onChange={(e) => onConsigneeChange({...consignee, name: e.target.value})}
-                      placeholder="Consignee Name"
-                      className="h-6 text-xs w-full"
-                    />
-                    <Textarea
-                      value={consignee.address}
-                      onChange={(e) => onConsigneeChange({...consignee, address: e.target.value})}
-                      placeholder="Address"
-                      className="h-14 text-xs w-full"
-                      rows={2}
-                    />
-                    <div className="grid grid-cols-2 gap-1">
+            {/* Consignee Section */}
+            <div>
+              <h3 className="font-bold text-xs mb-1 text-blue-700">SHIP TO</h3>
+              <div className="border border-gray-300 p-2 rounded">
+                {editable && onConsigneeChange ? (
+                  <>
+                    <div className="space-y-1 print:hidden">
                       <Input
-                        value={consignee.gstin}
-                        onChange={(e) => onConsigneeChange({...consignee, gstin: e.target.value})}
-                        placeholder="GSTIN"
-                        className="h-6 text-xs"
+                        value={consignee.name}
+                        onChange={(e) => onConsigneeChange({...consignee, name: e.target.value})}
+                        placeholder="Consignee Name"
+                        className="h-6 text-xs w-full"
                       />
-                      <Input
-                        value={consignee.state}
-                        onChange={(e) => onConsigneeChange({...consignee, state: e.target.value})}
-                        placeholder="State"
-                        className="h-6 text-xs"
+                      <Textarea
+                        value={consignee.address}
+                        onChange={(e) => onConsigneeChange({...consignee, address: e.target.value})}
+                        placeholder="Address"
+                        className="h-14 text-xs w-full"
+                        rows={2}
                       />
+                      <div className="grid grid-cols-2 gap-1">
+                        <Input
+                          value={consignee.gstin}
+                          onChange={(e) => onConsigneeChange({...consignee, gstin: e.target.value})}
+                          placeholder="GSTIN"
+                          className="h-6 text-xs"
+                        />
+                        <Input
+                          value={consignee.state}
+                          onChange={(e) => onConsigneeChange({...consignee, state: e.target.value})}
+                          placeholder="State"
+                          className="h-6 text-xs"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="hidden print:block text-xs space-y-0.5">
+                    <div className="hidden print:block text-xs space-y-0.5">
+                      <p className="font-semibold">{consignee.name || "Not provided"}</p>
+                      <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
+                      <div className="grid grid-cols-2 gap-1 mt-1">
+                        <p><span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}</p>
+                        <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs space-y-0.5">
                     <p className="font-semibold">{consignee.name || "Not provided"}</p>
                     <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
                     <div className="grid grid-cols-2 gap-1 mt-1">
@@ -340,27 +503,19 @@ export const ProfessionalInvoice = ({
                       <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
                     </div>
                   </div>
-                </>
-              ) : (
-                <div className="text-xs space-y-0.5">
-                  <p className="font-semibold">{consignee.name || "Not provided"}</p>
-                  <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
-                  <div className="grid grid-cols-2 gap-1 mt-1">
-                    <p><span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}</p>
-                    <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* ===== ITEMS TABLE ===== */}
       <div className="mb-4">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="bg-blue-50">
+            <thead className="print:table-header-group print:break-inside-avoid">
+              <tr className="bg-blue-50 print:bg-blue-50 print:print-color-adjust-exact">
                 <th className="border border-gray-400 p-1 text-center">Sr.</th>
                 <th className="border border-gray-400 p-1 text-left">Description</th>
                 <th className="border border-gray-400 p-1 text-center">HSN</th>
@@ -375,140 +530,10 @@ export const ProfessionalInvoice = ({
               </tr>
             </thead>
             <tbody>
-              {items.map((item, index) => (
-                <tr key={item.id}>
-                  <td className="border border-gray-300 p-1 text-center">{item.srNo}</td>
-                  <td className="border border-gray-300 p-1">
-                    {editable ? (
-                      <>
-                        <Input
-                          value={item.description}
-                          onChange={(e) => updateItem(index, 'description', e.target.value)}
-                          className="h-5 text-xs w-full print:hidden"
-                          placeholder="Item description"
-                        />
-                        <span className="hidden print:inline text-xs">
-                          {item.description || "-"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="text-xs">{item.description || "-"}</span>
-                    )}
-                  </td>
-                  <td className="border border-gray-300 p-1">
-                    {editable ? (
-                      <>
-                        <Input
-                          value={item.hsn}
-                          onChange={(e) => updateItem(index, 'hsn', e.target.value)}
-                          className="h-5 text-xs text-center w-full print:hidden"
-                          placeholder="HSN Code"
-                        />
-                        <span className="hidden print:inline block text-center text-xs">
-                          {item.hsn || "-"}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="block text-center text-xs">{item.hsn || "-"}</span>
-                    )}
-                  </td>
-                  <td className="border border-gray-300 p-1">
-                    {editable ? (
-                      <>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.rate}
-                          onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
-                          className="h-5 text-xs text-right w-full print:hidden"
-                          placeholder="0.00"
-                        />
-                        <span className="hidden print:inline block text-right text-xs font-medium">
-                          {item.rate.toFixed(2)}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="block text-right text-xs font-medium">
-                        {item.rate.toFixed(2)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="border border-gray-300 p-1">
-                    {editable ? (
-                      <>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="h-5 text-xs text-center w-full print:hidden"
-                          placeholder="1"
-                        />
-                        <span className="hidden print:inline block text-center text-xs font-medium">
-                          {item.quantity}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="block text-center text-xs font-medium">{item.quantity}</span>
-                    )}
-                  </td>
-                  <td className="border border-gray-300 p-1 text-right">
-                    <span className="text-xs font-semibold">
-                      {item.taxableValue.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="border border-gray-300 p-1">
-                    {editable ? (
-                      <>
-                        <Input
-                          type="number"
-                          min="0"
-                          max="28"
-                          step="0.01"
-                          value={typeof item.gstPercent === 'number' ? item.gstPercent : ''}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const next = raw === '' ? undefined : parseFloat(raw);
-                            updateItem(index, 'gstPercent', next);
-                          }}
-                          className="h-5 text-xs text-center w-full print:hidden"
-                          placeholder="18"
-                        />
-                        <span className="hidden print:inline block text-center text-xs font-medium">
-                          {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
-                        </span>
-                      </>
-                    ) : (
-                      <span className="block text-center text-xs font-medium">
-                        {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="border border-gray-300 p-1 text-right">
-                    <span className="text-xs font-bold text-blue-700">
-                      {item.total.toFixed(2)}
-                    </span>
-                  </td>
-                  {editable && (
-                    <td className="border border-gray-300 p-1 text-center print:hidden">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                        title="Delete item"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {items.map((item, index) => renderItemRow(item, index))}
               
-              <tr className="bg-gray-50 font-bold">
+              {/* Totals Row */}
+              <tr className="bg-gray-50 font-bold print:bg-gray-50 print:print-color-adjust-exact">
                 <td colSpan={5} className="border border-gray-300 p-1 text-right pr-2">
                   <span className="text-xs">Total:</span>
                 </td>
@@ -529,6 +554,7 @@ export const ProfessionalInvoice = ({
           </table>
         </div>
         
+        {/* Add Item Button */}
         {editable && (
           <Button
             type="button"
@@ -543,118 +569,123 @@ export const ProfessionalInvoice = ({
         )}
       </div>
 
-      <div className="mb-3">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <h4 className="font-bold text-xs mb-1 text-blue-700">BANK DETAILS</h4>
-            <div className="border border-gray-300 p-2 rounded bg-gray-50">
-              {editable && onCompanyChange ? (
-                <>
-                  <div className="space-y-2 print:hidden">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-xs font-medium">Bank Name</Label>
-                        <Input
-                          value={company.bankName || ""}
-                          onChange={(e) => onCompanyChange({...company, bankName: e.target.value})}
-                          className="h-6 text-xs w-full"
-                        />
+      {/* ===== FOOTER SECTION ===== */}
+      <div className="print:break-inside-avoid print:page-break-inside-avoid">
+        <div className="mb-3">
+          <div className="grid grid-cols-2 gap-4">
+            {/* Bank Details */}
+            <div className="print:break-inside-avoid print:page-break-inside-avoid">
+              <h4 className="font-bold text-xs mb-1 text-blue-700">BANK DETAILS</h4>
+              <div className="border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact">
+                {editable && onCompanyChange ? (
+                  <>
+                    <div className="space-y-2 print:hidden">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs font-medium">Bank Name</Label>
+                          <Input
+                            value={company.bankName || ""}
+                            onChange={(e) => onCompanyChange({...company, bankName: e.target.value})}
+                            className="h-6 text-xs w-full"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium">Account No.</Label>
+                          <Input
+                            value={company.accountNo || ""}
+                            onChange={(e) => onCompanyChange({...company, accountNo: e.target.value})}
+                            className="h-6 text-xs w-full"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs font-medium">IFSC Code</Label>
+                          <Input
+                            value={company.ifscCode || ""}
+                            onChange={(e) => onCompanyChange({...company, ifscCode: e.target.value})}
+                            className="h-6 text-xs w-full"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium">Account Holder</Label>
+                          <Input
+                            value={company.accountHolderName || ""}
+                            onChange={(e) => onCompanyChange({...company, accountHolderName: e.target.value})}
+                            className="h-6 text-xs w-full"
+                          />
+                        </div>
                       </div>
                       <div>
-                        <Label className="text-xs font-medium">Account No.</Label>
+                        <Label className="text-xs font-medium">Branch Address</Label>
                         <Input
-                          value={company.accountNo || ""}
-                          onChange={(e) => onCompanyChange({...company, accountNo: e.target.value})}
+                          value={company.branchAddress || ""}
+                          onChange={(e) => onCompanyChange({...company, branchAddress: e.target.value})}
                           className="h-6 text-xs w-full"
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <Label className="text-xs font-medium">IFSC Code</Label>
-                        <Input
-                          value={company.ifscCode || ""}
-                          onChange={(e) => onCompanyChange({...company, ifscCode: e.target.value})}
-                          className="h-6 text-xs w-full"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs font-medium">Account Holder</Label>
-                        <Input
-                          value={company.accountHolderName || ""}
-                          onChange={(e) => onCompanyChange({...company, accountHolderName: e.target.value})}
-                          className="h-6 text-xs w-full"
-                        />
-                      </div>
+                    <div className="hidden print:block text-xs space-y-0.5">
+                      <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
+                      <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
+                      <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
+                      <p><span className="font-semibold">Branch:</span> {company.branchAddress || "-"}</p>
+                      <p><span className="font-semibold">Account Holder:</span> {company.accountHolderName || "-"}</p>
                     </div>
-                    <div>
-                      <Label className="text-xs font-medium">Branch Address</Label>
-                      <Input
-                        value={company.branchAddress || ""}
-                        onChange={(e) => onCompanyChange({...company, branchAddress: e.target.value})}
-                        className="h-6 text-xs w-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="hidden print:block text-xs space-y-0.5">
+                  </>
+                ) : (
+                  <div className="text-xs space-y-0.5">
                     <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
                     <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
                     <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
                     <p><span className="font-semibold">Branch:</span> {company.branchAddress || "-"}</p>
                     <p><span className="font-semibold">Account Holder:</span> {company.accountHolderName || "-"}</p>
                   </div>
-                </>
-              ) : (
-                <div className="text-xs space-y-0.5">
-                  <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
-                  <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
-                  <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
-                  <p><span className="font-semibold">Branch:</span> {company.branchAddress || "-"}</p>
-                  <p><span className="font-semibold">Account Holder:</span> {company.accountHolderName || "-"}</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <h4 className="font-bold text-xs mb-1 text-blue-700">AMOUNT SUMMARY</h4>
-            <div className="border border-gray-300 rounded overflow-hidden mb-3">
-              <table className="w-full text-xs">
-                <tbody>
-                  <tr className="border-b border-gray-300">
-                    <td className="p-2 font-semibold">Taxable Value:</td>
-                    <td className="p-2 text-right font-bold">
-                      ₹{totals.taxableValue.toFixed(2)}
-                    </td>
-                  </tr>
-                  <tr className="border-b border-gray-300">
-                    <td className="p-2 font-semibold">GST ({typeof items[0]?.gstPercent === 'number' ? `${items[0]!.gstPercent}%` : '-'}):</td>
-                    <td className="p-2 text-right font-bold">
-                      ₹{totals.gstAmount.toFixed(2)}
-                    </td>
-                  </tr>
-                  <tr className="border-t-2 border-gray-400 bg-blue-50">
-                    <td className="p-2 font-bold text-base">GRAND TOTAL:</td>
-                    <td className="p-2 text-right font-bold text-base text-green-700">
-                      ₹{totals.total.toFixed(2)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            
-            <div>
-              <p className="font-semibold text-xs mb-1 text-blue-700">AMOUNT IN WORDS</p>
-              <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs italic">
-                {convertToWords(totals.total)}
+            {/* Amount Summary */}
+            <div className="print:break-inside-avoid print:page-break-inside-avoid">
+              <h4 className="font-bold text-xs mb-1 text-blue-700">AMOUNT SUMMARY</h4>
+              <div className="border border-gray-300 rounded overflow-hidden mb-3">
+                <table className="w-full text-xs">
+                  <tbody>
+                    <tr className="border-b border-gray-300">
+                      <td className="p-2 font-semibold">Taxable Value:</td>
+                      <td className="p-2 text-right font-bold">
+                        ₹{totals.taxableValue.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-b border-gray-300">
+                      <td className="p-2 font-semibold">GST ({typeof items[0]?.gstPercent === 'number' ? `${items[0]!.gstPercent}%` : '-'}):</td>
+                      <td className="p-2 text-right font-bold">
+                        ₹{totals.gstAmount.toFixed(2)}
+                      </td>
+                    </tr>
+                    <tr className="border-t-2 border-gray-400 bg-blue-50 print:bg-blue-50 print:print-color-adjust-exact">
+                      <td className="p-2 font-bold text-base">GRAND TOTAL:</td>
+                      <td className="p-2 text-right font-bold text-base text-green-700">
+                        ₹{totals.total.toFixed(2)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Amount in Words */}
+              <div className="print:break-inside-avoid print:page-break-inside-avoid">
+                <p className="font-semibold text-xs mb-1 text-blue-700">AMOUNT IN WORDS</p>
+                <div className="border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact min-h-[50px] text-xs italic">
+                  {convertToWords(totals.total)}
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mb-4">
-        <div>
+        {/* Remarks */}
+        <div className="print:break-inside-avoid print:page-break-inside-avoid mb-4">
           <p className="font-semibold text-xs mb-1 text-blue-700">REMARKS</p>
           {editable && onRemarksChange ? (
             <>
@@ -665,34 +696,35 @@ export const ProfessionalInvoice = ({
                 placeholder="Enter any remarks or terms here..."
                 rows={2}
               />
-              <div className="hidden print:block border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs">
+              <div className="hidden print:block border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact min-h-[50px] text-xs">
                 {remarks || "No remarks"}
               </div>
             </>
           ) : (
-            <div className="border border-gray-300 p-2 rounded bg-gray-50 min-h-[50px] text-xs">
+            <div className="border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact min-h-[50px] text-xs">
               {remarks || "No remarks"}
             </div>
           )}
         </div>
-      </div>
 
-      <div className="pt-3 border-t-2 border-black">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="font-bold text-xs mb-6">For {company.name}</p>
-            <div className="text-center mt-10">
-              <div className="border-t border-black w-40 mx-auto pt-1">
-                <p className="text-xs font-semibold">Authorized Signatory</p>
+        {/* Signatures */}
+        <div className="print:break-inside-avoid print:page-break-inside-avoid pt-3 border-t-2 border-black">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="font-bold text-xs mb-6">For {company.name}</p>
+              <div className="text-center mt-10">
+                <div className="border-t border-black w-40 mx-auto pt-1">
+                  <p className="text-xs font-semibold">Authorized Signatory</p>
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="text-right">
-            <p className="font-bold text-xs mb-6">Receiver's Signature</p>
-            <div className="text-center mt-10">
-              <div className="border-t border-black w-40 ml-auto pt-1">
-                <p className="text-xs font-semibold">Seal & Signature</p>
+            
+            <div className="text-right">
+              <p className="font-bold text-xs mb-6">Receiver's Signature</p>
+              <div className="text-center mt-10">
+                <div className="border-t border-black w-40 ml-auto pt-1">
+                  <p className="text-xs font-semibold">Seal & Signature</p>
+                </div>
               </div>
             </div>
           </div>
@@ -700,8 +732,11 @@ export const ProfessionalInvoice = ({
       </div>
     </div>
   );
-};
+});
 
+ProfessionalInvoice.displayName = 'ProfessionalInvoice';
+
+// Number to words conversion
 function convertToWords(num: number): string {
   if (num === 0) return "Zero Rupees Only";
   

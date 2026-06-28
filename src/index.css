@@ -322,60 +322,41 @@
 
 
 
+/* Extra/duplicate print blocks removed to avoid conflicting pagination rules.
+   Main print rules live in the first @media print above. */
+
 @media print {
-  @page {
-    margin: 10mm;
-    size: A4;
+  /* Keep Chrome pagination stable */
+  .print\\:header-block,
+  .print\\:footer-block,
+  .print\\:items-block {
+    width: 100% !important;
   }
-  
-  body {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
+
+  /* Page size/margins already defined above; don't override margins twice. */
+
+  /* Repeat table header on each page */
+  thead.invoice-table-thead,
+  .invoice-table thead {
+    display: table-header-group !important;
   }
-  
-  .no-print {
-    display: none !important;
+
+  /* Only table body should paginate; prevent splitting header/footer groups */
+  .print\\:header-block,
+  .print\\:footer-block {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
-  
-  .print\:hidden {
-    display: none !important;
+
+  /* Ensure items block can break, but table rows won't be split */
+  .print\\:items-block {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
   }
-  
-  table {
-    page-break-inside: avoid;
-    break-inside: avoid;
-  }
-  
-  tr {
-    page-break-inside: avoid;
-    break-inside: avoid;
+
+  .print\\:items-block table tbody tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
-@media print {
-  @page {
-    margin: 0;
-    size: A4;
-  }
-  
-  body {
-    margin: 0;
-    padding: 0;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-  
-  * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  
-  .no-print,
-  .print\\:hidden {
-    display: none !important;
-  }
-  
-  .invoice-container {
-    box-shadow: none !important;
-    border: none !important;
-  }
-}
+

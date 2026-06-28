@@ -23,7 +23,7 @@ interface ProfessionalInvoiceProps {
   onRemarksChange?: (remarks: string) => void;
 }
 
-export const ProfessionalInvoice = React.memo(({
+export const ProfessionalInvoice = React.memo(({ 
   company,
   consignee,
   buyer,
@@ -38,7 +38,6 @@ export const ProfessionalInvoice = React.memo(({
   onItemsChange,
   onRemarksChange,
 }: ProfessionalInvoiceProps) => {
-  
   // Memoize totals calculation for performance
   const totals = useMemo(() => {
     return items.reduce(
@@ -83,209 +82,205 @@ export const ProfessionalInvoice = React.memo(({
     onItemsChange([...items, newItem]);
   }, [items, onItemsChange]);
 
-  const handleDeleteItem = useCallback((id: string) => {
-    if (!onItemsChange) return;
-    
-    const newItems = items.filter(item => item.id !== id)
-      .map((item, index) => ({ ...item, srNo: index + 1 }));
-    
-    onItemsChange(newItems);
-  }, [items, onItemsChange]);
+  const handleDeleteItem = useCallback(
+    (id: string) => {
+      if (!onItemsChange) return;
 
-  const updateItem = useCallback((index: number, field: keyof InvoiceItem, value: unknown) => {
-    if (!onItemsChange) return;
-    
-    const newItems = [...items];
-    const item = { ...newItems[index], [field]: value };
-    
-    // Recalculate amounts
-    const amount = item.rate * item.quantity;
-    const taxableValue = amount;
-    
-    item.amount = parseFloat(amount.toFixed(2));
-    item.taxableValue = parseFloat(taxableValue.toFixed(2));
-    
-    // Calculate GST
-    const gstRate = typeof item.gstPercent === "number" ? item.gstPercent : undefined;
+      const newItems = items
+        .filter((item) => item.id !== id)
+        .map((item, index) => ({ ...item, srNo: index + 1 }));
 
-    if (gstRate === undefined) {
-      item.sgstRate = 0;
-      item.cgstRate = 0;
-      item.sgstAmount = 0;
-      item.cgstAmount = 0;
-      item.igstRate = 0;
-      item.igstAmount = 0;
-      item.total = parseFloat(taxableValue.toFixed(2));
-    } else {
-      item.sgstRate = gstRate / 2;
-      item.cgstRate = gstRate / 2;
-      item.sgstAmount = parseFloat((taxableValue * (item.sgstRate / 100)).toFixed(2));
-      item.cgstAmount = parseFloat((taxableValue * (item.cgstRate / 100)).toFixed(2));
-      item.igstRate = 0;
-      item.igstAmount = 0;
-      item.total = parseFloat((taxableValue + item.sgstAmount + item.cgstAmount).toFixed(2));
-    }
+      onItemsChange(newItems);
+    },
+    [items, onItemsChange]
+  );
 
-    newItems[index] = item;
-    onItemsChange(newItems);
-  }, [items, onItemsChange]);
+  const updateItem = useCallback(
+    (index: number, field: keyof InvoiceItem, value: unknown) => {
+      if (!onItemsChange) return;
+
+      const newItems = [...items];
+      const item = { ...newItems[index], [field]: value } as InvoiceItem;
+
+      // Recalculate amounts
+      const amount = item.rate * item.quantity;
+      const taxableValue = amount;
+
+      item.amount = parseFloat(amount.toFixed(2));
+      item.taxableValue = parseFloat(taxableValue.toFixed(2));
+
+      // Calculate GST
+      const gstRate = typeof item.gstPercent === "number" ? item.gstPercent : undefined;
+
+      if (gstRate === undefined) {
+        item.sgstRate = 0;
+        item.cgstRate = 0;
+        item.sgstAmount = 0;
+        item.cgstAmount = 0;
+        item.igstRate = 0;
+        item.igstAmount = 0;
+        item.total = parseFloat(taxableValue.toFixed(2));
+      } else {
+        item.sgstRate = gstRate / 2;
+        item.cgstRate = gstRate / 2;
+        item.sgstAmount = parseFloat((taxableValue * (item.sgstRate / 100)).toFixed(2));
+        item.cgstAmount = parseFloat((taxableValue * (item.cgstRate / 100)).toFixed(2));
+        item.igstRate = 0;
+        item.igstAmount = 0;
+        item.total = parseFloat((taxableValue + item.sgstAmount + item.cgstAmount).toFixed(2));
+      }
+
+      newItems[index] = item;
+      onItemsChange(newItems);
+    },
+    [items, onItemsChange]
+  );
 
   // Render item row
-  const renderItemRow = useCallback((item: InvoiceItem, index: number) => (
-    <tr key={item.id} className="print:break-inside-avoid">
-      <td className="border border-gray-300 p-1 text-center">{item.srNo}</td>
-      
-      {/* Description */}
-      <td className="border border-gray-300 p-1">
-        {editable ? (
-          <div className="print:hidden">
-            <Input
-              value={item.description}
-              onChange={(e) => updateItem(index, 'description', e.target.value)}
-              className="h-5 text-xs w-full"
-              placeholder="Item description"
-            />
-          </div>
-        ) : null}
-        <span className={editable ? "hidden print:block text-xs" : "text-xs"}>
-          {item.description || "-"}
-        </span>
-      </td>
-      
-      {/* HSN */}
-      <td className="border border-gray-300 p-1">
-        {editable ? (
-          <div className="print:hidden">
-            <Input
-              value={item.hsn}
-              onChange={(e) => updateItem(index, 'hsn', e.target.value)}
-              className="h-5 text-xs text-center w-full"
-              placeholder="HSN Code"
-            />
-          </div>
-        ) : null}
-        <span className={editable ? "hidden print:block text-center text-xs" : "block text-center text-xs"}>
-          {item.hsn || "-"}
-        </span>
-      </td>
-      
-      {/* Rate */}
-      <td className="border border-gray-300 p-1">
-        {editable ? (
-          <div className="print:hidden">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={item.rate}
-              onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
-              className="h-5 text-xs text-right w-full"
-              placeholder="0.00"
-            />
-          </div>
-        ) : null}
-        <span className={editable ? "hidden print:block text-right text-xs font-medium" : "block text-right text-xs font-medium"}>
-          {item.rate.toFixed(2)}
-        </span>
-      </td>
-      
-      {/* Quantity - FIXED: Only shows once in print */}
-      <td className="border border-gray-300 p-1">
-        {editable ? (
-          <div className="print:hidden">
-            <Input
-              type="number"
-              min="0"
-              step="1"
-              value={item.quantity}
-              onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-              className="h-5 text-xs text-center w-full"
-              placeholder="1"
-            />
-          </div>
-        ) : null}
-        <span className={editable ? "hidden print:block text-center text-xs font-medium" : "block text-center text-xs font-medium"}>
-          {item.quantity}
-        </span>
-      </td>
-      
-      {/* Taxable Value */}
-      <td className="border border-gray-300 p-1 text-right">
-        <span className="text-xs font-semibold">
-          {item.taxableValue.toFixed(2)}
-        </span>
-      </td>
-      
-      {/* GST% */}
-      <td className="border border-gray-300 p-1">
-        {editable ? (
-          <div className="print:hidden">
-            <Input
-              type="number"
-              min="0"
-              max="28"
-              step="0.01"
-              value={typeof item.gstPercent === 'number' ? item.gstPercent : ''}
-              onChange={(e) => {
-                const raw = e.target.value;
-                const next = raw === '' ? undefined : parseFloat(raw);
-                updateItem(index, 'gstPercent', next);
-              }}
-              className="h-5 text-xs text-center w-full"
-              placeholder="18"
-            />
-          </div>
-        ) : null}
-        <span className={editable ? "hidden print:block text-center text-xs font-medium" : "block text-center text-xs font-medium"}>
-          {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
-        </span>
-      </td>
-      
-      {/* Amount */}
-      <td className="border border-gray-300 p-1 text-right">
-        <span className="text-xs font-bold text-blue-700">
-          {item.total.toFixed(2)}
-        </span>
-      </td>
-      
-      {/* Action */}
-      {editable && (
-        <td className="border border-gray-300 p-1 text-center print:hidden">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDeleteItem(item.id)}
-            className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-            title="Delete item"
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+  const renderItemRow = useCallback(
+    (item: InvoiceItem, index: number) => (
+      <tr key={item.id} className="print:break-inside-avoid">
+        <td className="border border-gray-300 p-1 text-center">{item.srNo}</td>
+
+        <td className="border border-gray-300 p-1">
+          {editable ? (
+            <div className="print:hidden">
+              <Input
+                value={item.description}
+                onChange={(e) => updateItem(index, 'description', e.target.value)}
+                className="h-5 text-xs w-full"
+                placeholder="Item description"
+              />
+            </div>
+          ) : null}
+          <span className={editable ? "hidden print:block text-xs" : "text-xs"}>
+            {item.description || "-"}
+          </span>
         </td>
-      )}
-    </tr>
-  ), [editable, updateItem, handleDeleteItem]);
+
+        <td className="border border-gray-300 p-1">
+          {editable ? (
+            <div className="print:hidden">
+              <Input
+                value={item.hsn}
+                onChange={(e) => updateItem(index, 'hsn', e.target.value)}
+                className="h-5 text-xs text-center w-full"
+                placeholder="HSN Code"
+              />
+            </div>
+          ) : null}
+          <span className={editable ? "hidden print:block text-center text-xs" : "block text-center text-xs"}>
+            {item.hsn || "-"}
+          </span>
+        </td>
+
+        <td className="border border-gray-300 p-1">
+          {editable ? (
+            <div className="print:hidden">
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={item.rate}
+                onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
+                className="h-5 text-xs text-right w-full"
+                placeholder="0.00"
+              />
+            </div>
+          ) : null}
+          <span className={editable ? "hidden print:block text-right text-xs font-medium" : "block text-right text-xs font-medium"}>
+            {item.rate.toFixed(2)}
+          </span>
+        </td>
+
+        <td className="border border-gray-300 p-1">
+          {editable ? (
+            <div className="print:hidden">
+              <Input
+                type="number"
+                min="0"
+                step="1"
+                value={item.quantity}
+                onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                className="h-5 text-xs text-center w-full"
+                placeholder="1"
+              />
+            </div>
+          ) : null}
+          <span className={editable ? "hidden print:block text-center text-xs font-medium" : "block text-center text-xs font-medium"}>
+            {item.quantity}
+          </span>
+        </td>
+
+        <td className="border border-gray-300 p-1 text-right">
+          <span className="text-xs font-semibold">{item.taxableValue.toFixed(2)}</span>
+        </td>
+
+        <td className="border border-gray-300 p-1">
+          {editable ? (
+            <div className="print:hidden">
+              <Input
+                type="number"
+                min="0"
+                max="28"
+                step="0.01"
+                value={typeof item.gstPercent === 'number' ? item.gstPercent : ''}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const next = raw === '' ? undefined : parseFloat(raw);
+                  updateItem(index, 'gstPercent', next);
+                }}
+                className="h-5 text-xs text-center w-full"
+                placeholder="18"
+              />
+            </div>
+          ) : null}
+          <span className={editable ? "hidden print:block text-center text-xs font-medium" : "block text-center text-xs font-medium"}>
+            {typeof item.gstPercent === 'number' ? `${item.gstPercent}%` : '-'}
+          </span>
+        </td>
+
+        <td className="border border-gray-300 p-1 text-right">
+          <span className="text-xs font-bold text-blue-700">{item.total.toFixed(2)}</span>
+        </td>
+
+        {editable && (
+          <td className="border border-gray-300 p-1 text-center print:hidden">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteItem(item.id)}
+              className="h-5 w-5 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+              title="Delete item"
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </td>
+        )}
+      </tr>
+    ),
+    [editable, updateItem, handleDeleteItem]
+  );
 
   return (
     <div className="bg-white p-6 print:p-0 w-[210mm] print:w-full min-h-[297mm] print:min-h-auto mx-auto font-sans print:border-0 print:shadow-none print:overflow-visible">
-      
-      {/* ===== HEADER SECTION ===== */}
-      <div className="print:break-inside-avoid print:page-break-inside-avoid">
+      {/* ===== HEADER SECTION (must stay on first page) ===== */}
+      <div className="print:header-block">
         <div className="border-b-2 border-black pb-4 mb-4">
           <div className="flex justify-between items-start">
-            {/* Company Details */}
             <div className="flex-1">
               <div className="flex items-start gap-3 mb-2">
                 {company.logo && (
                   <div className="print:max-h-[60px]">
-                    <img 
-                      src={company.logo} 
+                    <img
+                      src={company.logo}
                       alt={`${company.name} Logo`}
                       className="h-16 w-auto object-contain print:max-h-[60px]"
                     />
                   </div>
                 )}
-                
+
                 <div className="flex-1 print:break-inside-avoid">
                   <div className="print:break-inside-avoid">
                     <h1 className="text-3xl font-black text-blue-900 tracking-wider mb-1">
@@ -295,23 +290,30 @@ export const ProfessionalInvoice = React.memo(({
                       Style Your Moment
                     </div>
                   </div>
-                  
+
                   <div className="text-xs text-gray-600 space-y-0.5">
                     <p className="font-medium">{company.address}</p>
                     <div className="grid grid-cols-2 gap-1">
-                      <p><span className="font-semibold">GSTIN:</span> {company.gstin}</p>
-                      <p><span className="font-semibold">State:</span> {company.state} ({company.stateCode})</p>
+                      <p>
+                        <span className="font-semibold">GSTIN:</span> {company.gstin}
+                      </p>
+                      <p>
+                        <span className="font-semibold">State:</span> {company.state} ({company.stateCode})
+                      </p>
                     </div>
                     <div className="grid grid-cols-2 gap-1">
-                      <p><span className="font-semibold">Mobile:</span> {company.mobile || "Not provided"}</p>
-                      <p><span className="font-semibold">Email:</span> {company.email || "Not provided"}</p>
+                      <p>
+                        <span className="font-semibold">Mobile:</span> {company.mobile || "Not provided"}
+                      </p>
+                      <p>
+                        <span className="font-semibold">Email:</span> {company.email || "Not provided"}
+                      </p>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            
-            {/* Invoice Details */}
+
             <div className="border-l pl-3 ml-3">
               <div className="mb-3">
                 {editable && onDetailsChange ? (
@@ -335,48 +337,41 @@ export const ProfessionalInvoice = React.memo(({
 
               <div className="space-y-1">
                 <div className="grid grid-cols-2 gap-1 items-center">
-                  {editable && onDetailsChange ? (
-                    <Input
-                      value={details.invoiceNoLabel || "Invoice No"}
-                      onChange={(e) => onDetailsChange({...details, invoiceNoLabel: e.target.value})}
-                      className="h-6 text-xs font-semibold w-full"
-                      placeholder="Label name"
-                    />
-                  ) : (
-                    <span className="font-semibold text-xs">{details.invoiceNoLabel || "Invoice No"}:</span>
-                  )}
+                  <span className="font-semibold text-xs">Invoice No:</span>
+
                   {editable && onDetailsChange ? (
                     <Input
                       value={details.invoiceNo}
-                      onChange={(e) => onDetailsChange({...details, invoiceNo: e.target.value})}
+                      onChange={(e) => onDetailsChange({ ...details, invoiceNo: e.target.value })}
                       className="h-6 text-xs w-full"
                       placeholder="Enter number"
                     />
                   ) : (
                     <span className="font-medium text-xs">{details.invoiceNo}</span>
                   )}
+
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-1 items-center">
                   <span className="font-semibold text-xs">Date:</span>
                   {editable && onDetailsChange ? (
                     <Input
                       type="date"
                       value={format(details.date, 'yyyy-MM-dd')}
-                      onChange={(e) => onDetailsChange({...details, date: new Date(e.target.value)})}
+                      onChange={(e) => onDetailsChange({ ...details, date: new Date(e.target.value) })}
                       className="h-6 text-xs w-full"
                     />
                   ) : (
                     <span className="text-xs">{format(details.date, 'dd/MM/yyyy')}</span>
                   )}
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-1 items-center">
                   <span className="font-semibold text-xs">Payment Terms:</span>
                   {editable && onDetailsChange ? (
                     <Input
                       value={details.modeOfPayment}
-                      onChange={(e) => onDetailsChange({...details, modeOfPayment: e.target.value})}
+                      onChange={(e) => onDetailsChange({ ...details, modeOfPayment: e.target.value })}
                       className="h-6 text-xs w-full"
                     />
                   ) : (
@@ -387,13 +382,10 @@ export const ProfessionalInvoice = React.memo(({
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ===== PARTY SECTION ===== */}
-      <div className="print:break-inside-avoid print:page-break-inside-avoid">
+        {/* ===== PARTY SECTION ===== */}
         <div className="mb-4 border-b border-gray-300 pb-3">
           <div className="grid grid-cols-2 gap-4">
-            {/* Buyer Section */}
             <div>
               <h3 className="font-bold text-xs mb-1 text-blue-700">BILL TO</h3>
               <div className="border border-gray-300 p-2 rounded">
@@ -402,13 +394,13 @@ export const ProfessionalInvoice = React.memo(({
                     <div className="space-y-1 print:hidden">
                       <Input
                         value={buyer.name}
-                        onChange={(e) => onBuyerChange({...buyer, name: e.target.value})}
+                        onChange={(e) => onBuyerChange({ ...buyer, name: e.target.value })}
                         placeholder="Buyer Name"
                         className="h-6 text-xs w-full"
                       />
                       <Textarea
                         value={buyer.address}
-                        onChange={(e) => onBuyerChange({...buyer, address: e.target.value})}
+                        onChange={(e) => onBuyerChange({ ...buyer, address: e.target.value })}
                         placeholder="Address"
                         className="h-14 text-xs w-full"
                         rows={2}
@@ -416,13 +408,13 @@ export const ProfessionalInvoice = React.memo(({
                       <div className="grid grid-cols-2 gap-1">
                         <Input
                           value={buyer.gstin}
-                          onChange={(e) => onBuyerChange({...buyer, gstin: e.target.value})}
+                          onChange={(e) => onBuyerChange({ ...buyer, gstin: e.target.value })}
                           placeholder="GSTIN"
                           className="h-6 text-xs"
                         />
                         <Input
                           value={buyer.state}
-                          onChange={(e) => onBuyerChange({...buyer, state: e.target.value})}
+                          onChange={(e) => onBuyerChange({ ...buyer, state: e.target.value })}
                           placeholder="State"
                           className="h-6 text-xs"
                         />
@@ -432,8 +424,12 @@ export const ProfessionalInvoice = React.memo(({
                       <p className="font-semibold">{buyer.name || "Not provided"}</p>
                       <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
                       <div className="grid grid-cols-2 gap-1 mt-1">
-                        <p><span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}</p>
-                        <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
+                        <p>
+                          <span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}
+                        </p>
+                        <p>
+                          <span className="font-medium">State:</span> {buyer.state || "-"}
+                        </p>
                       </div>
                     </div>
                   </>
@@ -442,15 +438,18 @@ export const ProfessionalInvoice = React.memo(({
                     <p className="font-semibold">{buyer.name || "Not provided"}</p>
                     <p className="whitespace-pre-wrap text-gray-700">{buyer.address || "Not provided"}</p>
                     <div className="grid grid-cols-2 gap-1 mt-1">
-                      <p><span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}</p>
-                      <p><span className="font-medium">State:</span> {buyer.state || "-"}</p>
+                      <p>
+                        <span className="font-medium">GSTIN:</span> {buyer.gstin || "-"}
+                      </p>
+                      <p>
+                        <span className="font-medium">State:</span> {buyer.state || "-"}
+                      </p>
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Consignee Section */}
             <div>
               <h3 className="font-bold text-xs mb-1 text-blue-700">SHIP TO</h3>
               <div className="border border-gray-300 p-2 rounded">
@@ -459,13 +458,13 @@ export const ProfessionalInvoice = React.memo(({
                     <div className="space-y-1 print:hidden">
                       <Input
                         value={consignee.name}
-                        onChange={(e) => onConsigneeChange({...consignee, name: e.target.value})}
+                        onChange={(e) => onConsigneeChange({ ...consignee, name: e.target.value })}
                         placeholder="Consignee Name"
                         className="h-6 text-xs w-full"
                       />
                       <Textarea
                         value={consignee.address}
-                        onChange={(e) => onConsigneeChange({...consignee, address: e.target.value})}
+                        onChange={(e) => onConsigneeChange({ ...consignee, address: e.target.value })}
                         placeholder="Address"
                         className="h-14 text-xs w-full"
                         rows={2}
@@ -473,13 +472,13 @@ export const ProfessionalInvoice = React.memo(({
                       <div className="grid grid-cols-2 gap-1">
                         <Input
                           value={consignee.gstin}
-                          onChange={(e) => onConsigneeChange({...consignee, gstin: e.target.value})}
+                          onChange={(e) => onConsigneeChange({ ...consignee, gstin: e.target.value })}
                           placeholder="GSTIN"
                           className="h-6 text-xs"
                         />
                         <Input
                           value={consignee.state}
-                          onChange={(e) => onConsigneeChange({...consignee, state: e.target.value})}
+                          onChange={(e) => onConsigneeChange({ ...consignee, state: e.target.value })}
                           placeholder="State"
                           className="h-6 text-xs"
                         />
@@ -489,8 +488,12 @@ export const ProfessionalInvoice = React.memo(({
                       <p className="font-semibold">{consignee.name || "Not provided"}</p>
                       <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
                       <div className="grid grid-cols-2 gap-1 mt-1">
-                        <p><span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}</p>
-                        <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
+                        <p>
+                          <span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}
+                        </p>
+                        <p>
+                          <span className="font-medium">State:</span> {consignee.state || "-"}
+                        </p>
                       </div>
                     </div>
                   </>
@@ -499,8 +502,12 @@ export const ProfessionalInvoice = React.memo(({
                     <p className="font-semibold">{consignee.name || "Not provided"}</p>
                     <p className="whitespace-pre-wrap text-gray-700">{consignee.address || "Not provided"}</p>
                     <div className="grid grid-cols-2 gap-1 mt-1">
-                      <p><span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}</p>
-                      <p><span className="font-medium">State:</span> {consignee.state || "-"}</p>
+                      <p>
+                        <span className="font-medium">GSTIN:</span> {consignee.gstin || "-"}
+                      </p>
+                      <p>
+                        <span className="font-medium">State:</span> {consignee.state || "-"}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -510,11 +517,11 @@ export const ProfessionalInvoice = React.memo(({
         </div>
       </div>
 
-      {/* ===== ITEMS TABLE ===== */}
-      <div className="mb-4">
+      {/* ===== ITEMS TABLE (only this continues onto next pages) ===== */}
+      <div className="print:items-block mb-4">
         <div className="overflow-x-auto print:overflow-visible">
           <table className="w-full border-collapse text-xs">
-            <thead className="print:table-header-group print:break-inside-avoid">
+            <thead className="print:table-header-group invoice-table-thead">
               <tr className="bg-blue-50 print:bg-blue-50 print:print-color-adjust-exact">
                 <th className="border border-gray-400 p-1 text-center">Sr.</th>
                 <th className="border border-gray-400 p-1 text-left">Description</th>
@@ -524,37 +531,29 @@ export const ProfessionalInvoice = React.memo(({
                 <th className="border border-gray-400 p-1 text-center">Taxable Value (₹)</th>
                 <th className="border border-gray-400 p-1 text-center">GST%</th>
                 <th className="border border-gray-400 p-1 text-center font-bold">Amount (₹)</th>
-                {editable && (
-                  <th className="border border-gray-400 p-1 text-center print:hidden">Action</th>
-                )}
+                {editable && <th className="border border-gray-400 p-1 text-center print:hidden">Action</th>}
               </tr>
             </thead>
             <tbody>
               {items.map((item, index) => renderItemRow(item, index))}
-              
-              {/* Totals Row */}
+
               <tr className="bg-gray-50 font-bold print:bg-gray-50 print:print-color-adjust-exact">
                 <td colSpan={5} className="border border-gray-300 p-1 text-right pr-2">
                   <span className="text-xs">Total:</span>
                 </td>
                 <td className="border border-gray-300 p-1 text-right">
-                  <span className="text-xs text-blue-700">
-                    {totals.taxableValue.toFixed(2)}
-                  </span>
+                  <span className="text-xs text-blue-700">{totals.taxableValue.toFixed(2)}</span>
                 </td>
                 <td className="border border-gray-300 p-1"></td>
                 <td className="border border-gray-300 p-1 text-right">
-                  <span className="text-xs text-green-700 font-bold">
-                    {totals.total.toFixed(2)}
-                  </span>
+                  <span className="text-xs text-green-700 font-bold">{totals.total.toFixed(2)}</span>
                 </td>
                 {editable && <td className="border border-gray-300 p-1 print:hidden"></td>}
               </tr>
             </tbody>
           </table>
         </div>
-        
-        {/* Add Item Button */}
+
         {editable && (
           <Button
             type="button"
@@ -570,10 +569,9 @@ export const ProfessionalInvoice = React.memo(({
       </div>
 
       {/* ===== FOOTER SECTION ===== */}
-      <div className="print:break-inside-avoid print:page-break-inside-avoid">
+      <div className="print:footer-block">
         <div className="mb-3">
           <div className="grid grid-cols-2 gap-4">
-            {/* Bank Details */}
             <div className="print:break-inside-avoid print:page-break-inside-avoid">
               <h4 className="font-bold text-xs mb-1 text-blue-700">BANK DETAILS</h4>
               <div className="border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact">
@@ -585,7 +583,7 @@ export const ProfessionalInvoice = React.memo(({
                           <Label className="text-xs font-medium">Bank Name</Label>
                           <Input
                             value={company.bankName || ""}
-                            onChange={(e) => onCompanyChange({...company, bankName: e.target.value})}
+                            onChange={(e) => onCompanyChange({ ...company, bankName: e.target.value })}
                             className="h-6 text-xs w-full"
                           />
                         </div>
@@ -593,7 +591,7 @@ export const ProfessionalInvoice = React.memo(({
                           <Label className="text-xs font-medium">Account No.</Label>
                           <Input
                             value={company.accountNo || ""}
-                            onChange={(e) => onCompanyChange({...company, accountNo: e.target.value})}
+                            onChange={(e) => onCompanyChange({ ...company, accountNo: e.target.value })}
                             className="h-6 text-xs w-full"
                           />
                         </div>
@@ -603,7 +601,7 @@ export const ProfessionalInvoice = React.memo(({
                           <Label className="text-xs font-medium">IFSC Code</Label>
                           <Input
                             value={company.ifscCode || ""}
-                            onChange={(e) => onCompanyChange({...company, ifscCode: e.target.value})}
+                            onChange={(e) => onCompanyChange({ ...company, ifscCode: e.target.value })}
                             className="h-6 text-xs w-full"
                           />
                         </div>
@@ -611,7 +609,7 @@ export const ProfessionalInvoice = React.memo(({
                           <Label className="text-xs font-medium">Account Holder</Label>
                           <Input
                             value={company.accountHolderName || ""}
-                            onChange={(e) => onCompanyChange({...company, accountHolderName: e.target.value})}
+                            onChange={(e) => onCompanyChange({ ...company, accountHolderName: e.target.value })}
                             className="h-6 text-xs w-full"
                           />
                         </div>
@@ -620,11 +618,12 @@ export const ProfessionalInvoice = React.memo(({
                         <Label className="text-xs font-medium">Branch Address</Label>
                         <Input
                           value={company.branchAddress || ""}
-                          onChange={(e) => onCompanyChange({...company, branchAddress: e.target.value})}
+                          onChange={(e) => onCompanyChange({ ...company, branchAddress: e.target.value })}
                           className="h-6 text-xs w-full"
                         />
                       </div>
                     </div>
+
                     <div className="hidden print:block text-xs space-y-0.5">
                       <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
                       <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
@@ -645,7 +644,6 @@ export const ProfessionalInvoice = React.memo(({
               </div>
             </div>
 
-            {/* Amount Summary */}
             <div className="print:break-inside-avoid print:page-break-inside-avoid">
               <h4 className="font-bold text-xs mb-1 text-blue-700">AMOUNT SUMMARY</h4>
               <div className="border border-gray-300 rounded overflow-hidden mb-3">
@@ -653,27 +651,22 @@ export const ProfessionalInvoice = React.memo(({
                   <tbody>
                     <tr className="border-b border-gray-300">
                       <td className="p-2 font-semibold">Taxable Value:</td>
-                      <td className="p-2 text-right font-bold">
-                        ₹{totals.taxableValue.toFixed(2)}
-                      </td>
+                      <td className="p-2 text-right font-bold">₹{totals.taxableValue.toFixed(2)}</td>
                     </tr>
                     <tr className="border-b border-gray-300">
-                      <td className="p-2 font-semibold">GST ({typeof items[0]?.gstPercent === 'number' ? `${items[0]!.gstPercent}%` : '-'}):</td>
-                      <td className="p-2 text-right font-bold">
-                        ₹{totals.gstAmount.toFixed(2)}
+                      <td className="p-2 font-semibold">
+                        GST ({typeof items[0]?.gstPercent === 'number' ? `${items[0]!.gstPercent}%` : '-' }):
                       </td>
+                      <td className="p-2 text-right font-bold">₹{totals.gstAmount.toFixed(2)}</td>
                     </tr>
                     <tr className="border-t-2 border-gray-400 bg-blue-50 print:bg-blue-50 print:print-color-adjust-exact">
                       <td className="p-2 font-bold text-base">GRAND TOTAL:</td>
-                      <td className="p-2 text-right font-bold text-base text-green-700">
-                        ₹{totals.total.toFixed(2)}
-                      </td>
+                      <td className="p-2 text-right font-bold text-base text-green-700">₹{totals.total.toFixed(2)}</td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-              
-              {/* Amount in Words */}
+
               <div className="print:break-inside-avoid print:page-break-inside-avoid">
                 <p className="font-semibold text-xs mb-1 text-blue-700">AMOUNT IN WORDS</p>
                 <div className="border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact min-h-[50px] text-xs italic">
@@ -684,7 +677,6 @@ export const ProfessionalInvoice = React.memo(({
           </div>
         </div>
 
-        {/* Remarks */}
         <div className="print:break-inside-avoid print:page-break-inside-avoid mb-4">
           <p className="font-semibold text-xs mb-1 text-blue-700">REMARKS</p>
           {editable && onRemarksChange ? (
@@ -707,7 +699,6 @@ export const ProfessionalInvoice = React.memo(({
           )}
         </div>
 
-        {/* Signatures */}
         <div className="print:break-inside-avoid print:page-break-inside-avoid pt-3 border-t-2 border-black">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -718,7 +709,7 @@ export const ProfessionalInvoice = React.memo(({
                 </div>
               </div>
             </div>
-            
+
             <div className="text-right">
               <p className="font-bold text-xs mb-6">Receiver's Signature</p>
               <div className="text-center mt-10">
@@ -739,38 +730,35 @@ ProfessionalInvoice.displayName = 'ProfessionalInvoice';
 // Number to words conversion
 function convertToWords(num: number): string {
   if (num === 0) return "Zero Rupees Only";
-  
+
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
   const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-  
+
   function convertBelow1000(n: number): string {
     if (n === 0) return '';
     if (n < 10) return ones[n];
     if (n < 20) return teens[n - 10];
     if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
-    return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' and ' + convertBelow1000(n % 100) : '');
+    return (
+      ones[Math.floor(n / 100)] +
+      ' Hundred' +
+      (n % 100 !== 0 ? ' and ' + convertBelow1000(n % 100) : '')
+    );
   }
-  
+
   const crore = Math.floor(num / 10000000);
   const lakh = Math.floor((num % 10000000) / 100000);
   const thousand = Math.floor((num % 100000) / 1000);
   const remainder = Math.floor(num % 1000);
-  
+
   let result = '';
-  
-  if (crore > 0) {
-    result += convertBelow1000(crore) + ' Crore ';
-  }
-  if (lakh > 0) {
-    result += convertBelow1000(lakh) + ' Lakh ';
-  }
-  if (thousand > 0) {
-    result += convertBelow1000(thousand) + ' Thousand ';
-  }
-  if (remainder > 0) {
-    result += convertBelow1000(remainder);
-  }
-  
+
+  if (crore > 0) result += convertBelow1000(crore) + ' Crore ';
+  if (lakh > 0) result += convertBelow1000(lakh) + ' Lakh ';
+  if (thousand > 0) result += convertBelow1000(thousand) + ' Thousand ';
+  if (remainder > 0) result += convertBelow1000(remainder);
+
   return (result.trim() + ' Rupees Only').replace(/\s+/g, ' ');
 }
+

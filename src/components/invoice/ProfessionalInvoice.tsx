@@ -2,10 +2,12 @@ import React, { useMemo, useCallback } from 'react';
 import { Company, Party, InvoiceDetails, InvoiceItem } from "@/types/invoice";
 import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
+
+
+
 
 interface ProfessionalInvoiceProps {
   company: Company;
@@ -575,74 +577,26 @@ export const ProfessionalInvoice = React.memo(({
             <div className="print:break-inside-avoid print:page-break-inside-avoid">
               <h4 className="font-bold text-xs mb-1 text-blue-700">BANK DETAILS</h4>
               <div className="border border-gray-300 p-2 rounded bg-gray-50 print:bg-gray-50 print:print-color-adjust-exact">
-                {editable && onCompanyChange ? (
-                  <>
-                    <div className="space-y-2 print:hidden">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs font-medium">Bank Name</Label>
-                          <Input
-                            value={company.bankName || ""}
-                            onChange={(e) => onCompanyChange({ ...company, bankName: e.target.value })}
-                            className="h-6 text-xs w-full"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium">Account No.</Label>
-                          <Input
-                            value={company.accountNo || ""}
-                            onChange={(e) => onCompanyChange({ ...company, accountNo: e.target.value })}
-                            className="h-6 text-xs w-full"
-                          />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs font-medium">IFSC Code</Label>
-                          <Input
-                            value={company.ifscCode || ""}
-                            onChange={(e) => onCompanyChange({ ...company, ifscCode: e.target.value })}
-                            className="h-6 text-xs w-full"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium">Account Holder</Label>
-                          <Input
-                            value={company.accountHolderName || ""}
-                            onChange={(e) => onCompanyChange({ ...company, accountHolderName: e.target.value })}
-                            className="h-6 text-xs w-full"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <Label className="text-xs font-medium">Branch Address</Label>
-                        <Input
-                          value={company.branchAddress || ""}
-                          onChange={(e) => onCompanyChange({ ...company, branchAddress: e.target.value })}
-                          className="h-6 text-xs w-full"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="hidden print:block text-xs space-y-0.5">
-                      <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
-                      <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
-                      <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
-                      <p><span className="font-semibold">Branch:</span> {company.branchAddress || "-"}</p>
-                      <p><span className="font-semibold">Account Holder:</span> {company.accountHolderName || "-"}</p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-xs space-y-0.5">
-                    <p><span className="font-semibold">Bank:</span> {company.bankName || "-"}</p>
-                    <p><span className="font-semibold">A/c No.:</span> {company.accountNo || "-"}</p>
-                    <p><span className="font-semibold">IFSC Code:</span> {company.ifscCode || "-"}</p>
-                    <p><span className="font-semibold">Branch:</span> {company.branchAddress || "-"}</p>
-                    <p><span className="font-semibold">Account Holder:</span> {company.accountHolderName || "-"}</p>
-                  </div>
-                )}
+                <div className="text-xs space-y-0.5">
+                  <p>
+                    <span className="font-semibold">Account Name:</span> Rent My Event
+                  </p>
+                  <p>
+                    <span className="font-semibold">Bank Name:</span> State Bank of India
+                  </p>
+                  <p>
+                    <span className="font-semibold">Account Number:</span> 44853461690
+                  </p>
+                  <p>
+                    <span className="font-semibold">IFSC Code:</span> SBIN0010269
+                  </p>
+                  <p>
+                    <span className="font-semibold">Branch:</span> Madhuban Enclave
+                  </p>
+                </div>
               </div>
             </div>
+
 
             <div className="print:break-inside-avoid print:page-break-inside-avoid">
               <h4 className="font-bold text-xs mb-1 text-blue-700">AMOUNT SUMMARY</h4>

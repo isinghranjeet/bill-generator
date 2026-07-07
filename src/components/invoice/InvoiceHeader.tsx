@@ -3,6 +3,12 @@ import type { Company } from "@/types/invoice";
 
 import { formatDate } from "@/utils/formatters";
 import { Input } from "@/components/ui/input";
+import { useEffect, useMemo, useState } from "react";
+import { CreatableSearchableSelect } from "@/components/invoice/CreatableSearchableSelect";
+import { getInvoiceNumberKeys, getQuotationNumberKeys } from "@/lib/invoiceApi";
+
+
+
 
 
 interface InvoiceHeaderProps {
@@ -24,6 +30,39 @@ export const InvoiceHeader = ({
   const inputClass = editable
     ? "invoice-cell-input"
     : "bg-transparent border-0 cursor-default";
+
+  const [invoiceNoOptions, setInvoiceNoOptions] = useState<string[]>([]);
+  const [quotationNoOptions, setQuotationNoOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const run = async () => {
+      try {
+        const [invRes, quoRes] = await Promise.all([
+          getInvoiceNumberKeys(),
+          getQuotationNumberKeys(),
+        ]);
+
+        if (!mounted) return;
+
+        setInvoiceNoOptions(invRes.items ?? []);
+        setQuotationNoOptions(quoRes.items ?? []);
+      } catch {
+        // If keys endpoint fails, keep dropdown empty; user can still type custom values.
+        if (!mounted) return;
+        setInvoiceNoOptions([]);
+        setQuotationNoOptions([]);
+      }
+    };
+
+    if (editable) run();
+
+    return () => {
+      mounted = false;
+    };
+  }, [editable]);
+
 
   return (
     <div className="border-b border-border">
@@ -102,18 +141,31 @@ export const InvoiceHeader = ({
         <div className="col-span-2 grid grid-cols-2">
           <div className="border-r border-b border-border p-2">
             <div className="invoice-section-title"> No.</div>
-            <Input
+            <CreatableSearchableSelect
               value={details.invoiceNo}
-              onChange={(e) => onDetailsChange({ ...details, invoiceNo: e.target.value })}
-              className={`${inputClass} invoice-value`}
+              options={invoiceNoOptions}
               placeholder="INV-0001"
-              readOnly={!editable}
+              disabled={!editable}
+              onChange={(next) => onDetailsChange({ ...details, invoiceNo: next })}
             />
           </div>
+
           <div className="border-b border-border p-2">
             <div className="invoice-section-title">Dated</div>
             <div className="invoice-value">{formatDate(details.date)}</div>
           </div>
+
+          <div className="border-r border-b border-border p-2">
+            <div className="invoice-section-title">Quotation No</div>
+            <CreatableSearchableSelect
+              value={details.quotationNo ?? ""}
+              options={quotationNoOptions}
+              placeholder="Quotation No"
+              disabled={!editable}
+              onChange={(next) => onDetailsChange({ ...details, quotationNo: next })}
+            />
+          </div>
+
 
          
           <div className="border-b border-border p-2">

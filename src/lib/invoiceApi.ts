@@ -41,3 +41,13 @@ export async function deleteInvoice(invoiceNo: string) {
   });
 }
 
+export async function getInvoiceNumberKeys() {
+  return apiFetch<{ items: string[] }>("/api/invoices/numbers/invoice");
+}
+
+export async function getQuotationNumberKeys() {
+  return apiFetch<{ items: string[] }>("/api/invoices/numbers/quotation");
+}
+
+
+

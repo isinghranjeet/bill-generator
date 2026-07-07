@@ -46,7 +46,9 @@ const defaultInvoiceData: InvoiceData = {
   details: {
     invoiceTitle: "TAX INVOICE",
     invoiceNo: generateInvoiceNumber(),
+    quotationNo: "",
     date: new Date(),
+
     deliveryNote: "",
     modeOfPayment: "Net 30 Days",
     supplierRef: "",

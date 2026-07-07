@@ -84,6 +84,8 @@ export interface Party {
 export interface InvoiceDetails {
   invoiceTitle?: string;
   invoiceNo: string;
+  /** User-entered quotation number */
+  quotationNo?: string;
   date: Date;
   dueDate?: Date;
   deliveryNote: string;
@@ -99,6 +101,8 @@ export interface InvoiceDetails {
   termsOfDelivery: string;
   ewayBillNo?: string;
 }
+
+
 
 
 export interface InvoiceItem {

@@ -1,8 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { InvoiceData } from "@/types/invoice";
 import { generateInvoiceNumber } from "@/utils/calculations";
+
+const generateQuotationNumber = () => {
+  // Keep consistent format with ProfessionalInvoice (QTNO-YYYYMMDD-HHmm)
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const min = pad(d.getMinutes());
+  return `QTNO-${yyyy}${mm}${dd}-${hh}${min}`;
+};
+
 import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
 import { putInvoice, putInvoicesList } from "@/lib/invoiceCache";
 
@@ -27,7 +40,7 @@ const defaultInvoiceData: InvoiceData = {
     accountHolderName: "Rent My EVENT",
     mobile: "+91 9625340107",
     email: "Rentmyevents@gmail.com",
-    logo: "/logo.jpeg", 
+    logo: "/logo.jpeg",
   },
   consignee: {
     name: "",
@@ -90,11 +103,37 @@ const defaultInvoiceData: InvoiceData = {
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
-  const { saveInvoice, apiState, getInvoiceRemote } = useInvoiceStorage();
+  const [searchParams] = useSearchParams();
+  const documentTypeParam = (searchParams.get("type") || "invoice").toLowerCase();
+  const documentType = documentTypeParam === "quotation" ? "quotation" : "invoice";
 
+  const { saveInvoice, apiState, getInvoiceRemote } = useInvoiceStorage();
 
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(defaultInvoiceData);
   const [editable, setEditable] = useState(true);
+
+  useEffect(() => {
+    // Initialize UI mode based on query param.
+    // Keep all existing invoice fields intact; only switch the document heading/visibility inputs.
+    if (documentType === "quotation") {
+      setInvoiceData((prev) => ({
+        ...prev,
+        details: {
+          ...prev.details,
+          invoiceTitle: "QUOTATION",
+          quotationNo: prev.details.quotationNo || generateQuotationNumber(),
+        },
+      }));
+    } else {
+      setInvoiceData((prev) => ({
+        ...prev,
+        details: {
+          ...prev.details,
+          invoiceTitle: "TAX INVOICE",
+        },
+      }));
+    }
+  }, [documentType]);
 
   const handlePrint = () => {
     document.body.classList.add('printing');
@@ -109,8 +148,11 @@ const CreateInvoice = () => {
       ...defaultInvoiceData,
       details: {
         ...defaultInvoiceData.details,
-        invoiceNo: generateInvoiceNumber(),
+        ...(documentType === "invoice"
+          ? { invoiceNo: generateInvoiceNumber(), quotationNo: "" }
+          : { quotationNo: defaultInvoiceData.details.quotationNo || generateQuotationNumber(), invoiceTitle: "QUOTATION" }),
         date: new Date(),
+        invoiceTitle: documentType === "quotation" ? "QUOTATION" : "TAX INVOICE",
       },
       items: [
         {

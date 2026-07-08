@@ -267,10 +267,20 @@ const AdminPortal = () => {
                 <Download className="h-4 w-4 mr-2" />
                 Export
               </Button>
-              <Button onClick={() => navigate("/create")} className="shadow-sm">
-                <Plus className="h-4 w-4 mr-2" />
-                New Invoice
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="default" className="shadow-sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Invoice
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>New Document</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/create?type=invoice")}>Invoice</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/create?type=quotation")}>Quotation</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
 

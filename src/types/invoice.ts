@@ -131,6 +131,13 @@ export interface InvoiceItem {
 }
 
 
+export type DiscountType = "percentage" | "fixed";
+
+export interface InvoiceDiscount {
+  type: DiscountType;
+  value: number;
+}
+
 export interface InvoiceData {
   company: Company;
   consignee: Party;
@@ -138,9 +145,12 @@ export interface InvoiceData {
   details: InvoiceDetails;
   items: InvoiceItem[];
   remarks: string;
+  /** Invoice-level discount applied before GST calculations */
+  discount?: InvoiceDiscount;
   totalAmount: number;
   totalTax: number;
   totalAmountInWords: string;
 }
+
 
 

@@ -28,6 +28,7 @@ import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
 
 const createBlankInvoiceData = (): InvoiceData => ({
+  discount: { type: "percentage", value: 0 },
   company: {
     name: "Rent My EVENT",
     address: "A123 Main Road Mandawali Fazelfur Near New Delhi, 110092",
@@ -125,6 +126,68 @@ function computeTotalsFromItems(items: InvoiceItem[]) {
     grandTotal: parseFloat(totals.total.toFixed(2)),
   };
 }
+
+function clampNumber(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
+
+function computeDiscountAmount(subtotal: number, discount: InvoiceData["discount"] | undefined) {
+  if (!discount) return 0;
+  if (!Number.isFinite(discount.value)) return 0;
+
+  if (discount.type === "percentage") {
+    const pct = clampNumber(discount.value, 0, 100);
+    return parseFloat((subtotal * (pct / 100)).toFixed(2));
+  }
+
+  // fixed
+  return parseFloat(clampNumber(discount.value, 0, subtotal).toFixed(2));
+}
+
+function applyInvoiceDiscountToItems(items: InvoiceItem[], discount: InvoiceData["discount"] | undefined) {
+  const subtotal = items.reduce((acc, it) => acc + (it.taxableValue ?? 0), 0);
+  const discountAmountRaw = computeDiscountAmount(subtotal, discount);
+  const discountAmount = clampNumber(discountAmountRaw, 0, subtotal);
+
+  const discountedSubtotal = subtotal - discountAmount;
+  if (subtotal <= 0 || discountedSubtotal < 0) {
+    return {
+      discountedItems: items.map((it) => ({ ...it, taxableValue: 0, sgstAmount: 0, cgstAmount: 0, igstAmount: 0, total: 0 })),
+      discountAmount,
+      discountedSubtotal,
+    };
+  }
+
+  const scale = discountedSubtotal / subtotal;
+
+  const discountedItems = items.map((it) => {
+    const newTaxableValue = parseFloat(((it.taxableValue ?? 0) * scale).toFixed(2));
+    const gst = (it.sgstRate + it.cgstRate + it.igstRate) / 100;
+
+    const newSgstAmount = parseFloat((newTaxableValue * (it.sgstRate / 100)).toFixed(2));
+    const newCgstAmount = parseFloat((newTaxableValue * (it.cgstRate / 100)).toFixed(2));
+    const newIgstAmount = parseFloat((newTaxableValue * (it.igstRate / 100)).toFixed(2));
+
+    const newTotal = parseFloat((newTaxableValue + newSgstAmount + newCgstAmount + newIgstAmount).toFixed(2));
+
+    return {
+      ...it,
+      taxableValue: newTaxableValue,
+      sgstAmount: newSgstAmount,
+      cgstAmount: newCgstAmount,
+      igstAmount: newIgstAmount,
+      total: newTotal,
+      amount: newTaxableValue,
+    };
+  });
+
+  return {
+    discountedItems,
+    discountAmount,
+    discountedSubtotal: discountedSubtotal,
+  };
+}
+
 
 function convertToWords(num: number): string {
   if (num === 0) return "Zero Rupees Only";
@@ -306,8 +369,6 @@ export default function EditInvoice() {
     };
 
     try {
-      toast.loading("Saving invoice...");
-
       const currentInvoiceNo = invoiceToSave.details.invoiceNo;
       const original = originalInvoiceNo;
 

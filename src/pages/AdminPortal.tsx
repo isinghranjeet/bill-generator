@@ -108,7 +108,9 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
+
 type SortField = "date" | "amount" | "invoiceNo" | "customer";
+
 type SortDirection = "asc" | "desc";
 type FilterPeriod = "all" | "today" | "yesterday" | "last7" | "last30" | "thisMonth" | "lastMonth" | "thisYear" | "custom" | "customRange";
 type FilterType = "all" | "quotation" | "with_gst" | "without_gst";
@@ -961,10 +963,10 @@ const AdminPortal = () => {
   };
 
   const getInvoiceDate = (invoice: SavedInvoice): Date => {
-    const dateValue =
+      const dateValue: string | number | Date | undefined | null =
       invoice.details?.date ||
-      (invoice as any).createdAt ||
-      (invoice as any).updatedAt ||
+      (invoice as { createdAt?: unknown }).createdAt ||
+      (invoice as { updatedAt?: unknown }).updatedAt ||
       invoice.details?.createdAt ||
       null;
 
@@ -1604,6 +1606,7 @@ const AdminPortal = () => {
                 ? `<div class="remarks"><strong>Remarks:</strong> ${escapeHtml(invoice.remarks)}</div>`
                 : ""
             }
+
           </div>
         `;
 
@@ -1627,7 +1630,7 @@ const AdminPortal = () => {
                 el.textContent = 'Page ' + (i + 1) + ' of ' + totalPages;
               });
             })();
-          <\/script>
+          </script>
         </body>
         </html>
       `;

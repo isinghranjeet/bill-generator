@@ -63,6 +63,7 @@ const ViewInvoice = () => {
   }, [invoiceNo]);
 
   const handlePrint = () => {
+    toast.dismiss();
     window.print();
   };
 

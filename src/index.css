@@ -183,13 +183,21 @@
     zoom: 90%;
   }
   
-  /* Hide all non-printable elements */
+/* Hide all non-printable elements + toast/loading containers */
   .no-print,
   .print-hidden,
   button,
   .btn,
   [class*="print:hidden"],
   .print\:hidden {
+    display: none !important;
+  }
+
+  /* Sonner/toast: ensure no transient “Saving…/Generating…” text leaks into PDF */
+  [class*="sonner"],
+  [data-sonner-container],
+  [class*="Toast"],
+  [aria-live] {
     display: none !important;
   }
   

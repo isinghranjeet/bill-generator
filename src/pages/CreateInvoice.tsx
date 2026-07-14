@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 
 const defaultInvoiceData: InvoiceData = {
   company: {
+
     name: "Rent My EVENT",
     address: "A123 Main Road Mandawali Fazelfur Near New Delhi, 110092",
     gstin: "07KRDPD7397PIZT",
@@ -98,8 +99,10 @@ const defaultInvoiceData: InvoiceData = {
   remarks: "",
   totalAmount: 1180,
   totalTax: 180,
+  discount: { type: "percentage", value: 0 },
   totalAmountInWords: "One Thousand One Hundred and Eighty Rupees Only",
 };
+
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
@@ -136,6 +139,9 @@ const CreateInvoice = () => {
   }, [documentType]);
 
   const handlePrint = () => {
+
+    // Dismiss any active toasts before triggering print/PDF.
+    toast.dismiss();
     document.body.classList.add('printing');
     window.print();
     setTimeout(() => {
@@ -218,7 +224,6 @@ const CreateInvoice = () => {
     };
 
     try {
-      toast.loading("Saving invoice...");
       await saveInvoice(invoiceToSave);
       putInvoice(invoiceToSave);
       toast.success("Invoice saved successfully!");
@@ -237,7 +242,8 @@ const CreateInvoice = () => {
   };
 
   const generatePDF = () => {
-    toast.info("PDF generation in progress...");
+    // Never allow transient UI (toasts/loading) to appear in the printed PDF.
+    toast.dismiss();
     handlePrint();
   };
 

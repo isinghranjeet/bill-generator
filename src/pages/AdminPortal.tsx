@@ -1,3 +1,4 @@
+
 import { useState, useMemo, useEffect } from "react";
 import { useInvoiceOfflineCache } from "@/hooks/useInvoiceOfflineCache";
 import { useNavigate } from "react-router-dom";
@@ -332,7 +333,10 @@ const DateFilter: React.FC<DateFilterProps> = ({
               mode="range"
               selected={customRange}
               onSelect={(range) => {
-                setCustomRange(range || { from: undefined, to: undefined });
+            setCustomRange({
+                  from: range?.from,
+                  to: range?.to ?? undefined,
+                });
                 if (range?.from && range?.to) {
                   setIsRangeOpen(false);
                 }
@@ -963,14 +967,21 @@ const AdminPortal = () => {
   };
 
   const getInvoiceDate = (invoice: SavedInvoice): Date => {
-      const dateValue: string | number | Date | undefined | null =
-      invoice.details?.date ||
-      (invoice as { createdAt?: unknown }).createdAt ||
-      (invoice as { updatedAt?: unknown }).updatedAt ||
-      invoice.details?.createdAt ||
+    // Primary source for invoice listing/history date: createdAt.
+    // Backward compatibility:
+    // - If createdAt is missing, fall back to legacy stored fields exactly once
+    //   (we do not generate/overwrite with "today" here).
+    // Priority order:
+    //   1) invoice.createdAt
+    //   2) legacy: invoice.savedAt (older backend)
+    //   3) invoice.details.date (existing UI field)
+    const createdAtValue: string | number | Date | undefined | null =
+      (invoice as { createdAt?: string | number | Date | null | undefined }).createdAt ??
+      (invoice as { savedAt?: string | number | Date | null | undefined }).savedAt ??
+      invoice.details?.date ??
       null;
 
-    return parseLocalDate(dateValue);
+    return parseLocalDate(createdAtValue);
   };
 
   // Get active filter display
@@ -1284,7 +1295,25 @@ const AdminPortal = () => {
         reportType === "all"
           ? "COMPLETE INVOICE REPORT"
           : `${reportType.replace("_", " ").toUpperCase()} REPORT`;
-      const reportDate = new Date().toLocaleString();
+      // Keep report generation deterministic; use the newest invoice's createdAt (or fallback).
+      const newest = filteredReportInvoices
+        .slice()
+      .sort(
+            (a, b) =>
+              parseLocalDate(
+                (b as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null })
+                  .createdAt ??
+                  (b as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null }).savedAt ??
+                  b.details?.date
+              ).getTime() -
+              parseLocalDate(
+                (a as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null })
+                  .createdAt ??
+                  (a as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null }).savedAt ??
+                  a.details?.date
+              ).getTime()
+          )[0];
+      const reportDate = newest ? format(getInvoiceDate(newest), "PPpp") : "";
       const totalAmount = filteredReportInvoices.reduce(
         (sum, inv) => sum + inv.totalAmount,
         0
@@ -2034,10 +2063,10 @@ const AdminPortal = () => {
                     </TableHeader>
                     <TableBody>
                       {paginatedInvoices.map((invoice, index) => {
-                        const invDate = getInvoiceDate(invoice);
-                        const isRecent =
-                          !isNaN(invDate.getTime()) &&
-                          invDate > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+                    const invDate = getInvoiceDate(invoice);
+                    const isRecent =
+                      !isNaN(invDate.getTime()) &&
+                      invDate > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
                         const isGST = hasGST(invoice);
                         const isQuote = isQuotation(invoice);
                         const docType = isQuote

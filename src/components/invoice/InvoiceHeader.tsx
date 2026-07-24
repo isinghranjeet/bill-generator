@@ -31,8 +31,10 @@ export const InvoiceHeader = ({
     ? "invoice-cell-input"
     : "bg-transparent border-0 cursor-default";
 
+  // Snapshot architecture: invoice/quotation numbers must be immutable for an existing invoice.
   const [invoiceNoOptions, setInvoiceNoOptions] = useState<string[]>([]);
   const [quotationNoOptions, setQuotationNoOptions] = useState<string[]>([]);
+
 
   useEffect(() => {
     let mounted = true;
@@ -145,9 +147,12 @@ export const InvoiceHeader = ({
               value={details.invoiceNo}
               options={invoiceNoOptions}
               placeholder="INV-0001"
-              disabled={!editable}
-              onChange={(next) => onDetailsChange({ ...details, invoiceNo: next })}
+              disabled={true}
+              onChange={() => {
+                // no-op: immutable invoiceNo for snapshot architecture
+              }}
             />
+
           </div>
 
           <div className="border-b border-border p-2">
@@ -161,9 +166,12 @@ export const InvoiceHeader = ({
               value={details.quotationNo ?? ""}
               options={quotationNoOptions}
               placeholder="Quotation No"
-              disabled={!editable}
-              onChange={(next) => onDetailsChange({ ...details, quotationNo: next })}
+              disabled={true}
+              onChange={() => {
+                // no-op: immutable quotationNo for snapshot architecture
+              }}
             />
+
           </div>
 
 

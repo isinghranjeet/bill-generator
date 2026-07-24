@@ -1,31 +1,34 @@
-# TODO - Discount + GST Improvements
+# Integration Plan
 
-## Step 1: Add calculation helpers for invoice-level discount
-- [x] Update `src/utils/calculations.ts` to compute subtotal, discount amount, discounted subtotal
-- [x] Scale item taxable values and GST amounts after discount
-- [ ] Ensure validation rules (pct<=100, discount<=subtotal, gst>=0)
+## Step 1: Backend - Add bankDetails to Zod schema ✅
+- `backend/server/src/controllers/settingsController.js` - Add `bankDetails` to `settingsUpsertSchema`
 
+## Step 2: Backend - Update upsertSettings controller ✅
+- `backend/server/src/controllers/settingsController.js` - Assign bankDetails in upsertSettings
 
-## Step 2: Add Discount modal + button in CreateInvoice and EditInvoice headers
-- [ ] Update `src/pages/CreateInvoice.tsx`
-- [ ] Update `src/pages/EditInvoice.tsx`
-- [ ] Persist discount type/value in `invoiceData.discount`
+## Step 3: Frontend - Fix settingsApi.ts ✅
+- Add `updateBankDetails` and fix types
 
-## Step 3: Render discount lines + correct grand total in invoice UI
-- [ ] Update `src/components/invoice/ProfessionalInvoice.tsx`
-- [ ] Update `src/components/invoice/InvoiceSummary.tsx`
+## Step 4: Frontend - Fix useSettings.ts hook ✅
+- Fix type mapping to match flat API response
 
-## Step 4: GST Quick Suggestions chips on GST focus
-- [ ] Update `src/components/invoice/ProfessionalInvoice.tsx`
+## Step 5: Frontend - Add Settings button to AdminPortal ✅
+- Import SettingsDrawer, add Settings button in header, manage state
+- Added `settingsDrawerOpen` state variable
+- Added `Settings` icon button between Reports and New Invoice dropdowns
+- Added `<SettingsDrawer>` component rendered before the Report Dialog
 
-## Step 5: GST integer +/- buttons
-- [ ] Update `src/components/invoice/ProfessionalInvoice.tsx`
+## Step 6: Frontend - Add Bank Details to SettingsDrawer ✅
+- Add form fields and save handler
 
-## Step 6: Ensure totals and persistence on Save
-- [ ] Update total computation in `src/pages/CreateInvoice.tsx`
-- [ ] Update total computation in `src/pages/EditInvoice.tsx`
+## Step 7: Frontend - Fix ProfessionalInvoice bank details ✅
+- Replace hardcoded values with dynamic company props
 
-## Step 7: Build + Lint verification
-- [ ] `npm run lint`
-- [ ] `npm run build`
+## Step 8: Frontend - Fix CreateInvoice fallbacks + remarks chips ✅
+- Fix DEFAULT_COMPANY values
+- Add selectable remarks chips
+- Save only selected remarks
+
+## Step 9: Validation ✅
+- npm run lint && npm run build
 

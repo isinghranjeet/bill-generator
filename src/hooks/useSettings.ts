@@ -1,26 +1,47 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchSettings, updateCompanyProfile, updateInvoiceNumberSettings, updateRemarks } from "@/lib/settingsApi";
+import { fetchSettings, upsertSettings, updateRemarks } from "@/lib/settingsApi";
+import type { BankDetailsUpdate } from "@/lib/settingsApi";
 
 export type UserSettings = {
+  companyName: string;
+  address: string;
+  gstNumber: string;
+  phone: string;
+  email: string;
+  website: string;
+  logo: string;
+  invoicePrefix: string;
+  quotationPrefix: string;
+  invoiceStartNumber: number;
+  quotationStartNumber: number;
   remarks: string[];
-  invoiceNumberSettings: {
-    invoicePrefix: string;
-    quotationPrefix: string;
-    nextInvoiceNumber: number;
-    nextQuotationNumber: number;
-  };
-  companyProfile: {
-    name: string;
-    address: string;
-    gstNumber: string;
-    phoneNumber: string;
-    email: string;
-    logo: string;
-  };
+  bankDetails: BankDetailsUpdate;
+};
+
+const DEFAULT_SETTINGS: UserSettings = {
+  companyName: "",
+  address: "",
+  gstNumber: "",
+  phone: "",
+  email: "",
+  website: "",
+  logo: "",
+  invoicePrefix: "INV-",
+  quotationPrefix: "QT-",
+  invoiceStartNumber: 1001,
+  quotationStartNumber: 1001,
+  remarks: [],
+  bankDetails: {
+    accountName: "",
+    bankName: "",
+    accountNumber: "",
+    ifscCode: "",
+    branch: "",
+  },
 };
 
 export function useSettings() {
-  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +50,28 @@ export function useSettings() {
     setError(null);
     try {
       const res = await fetchSettings();
-      setSettings(res.settings as UserSettings);
+      const s = res.settings;
+      setSettings({
+        companyName: s.companyName ?? "",
+        address: s.address ?? "",
+        gstNumber: s.gstNumber ?? "",
+        phone: s.phone ?? "",
+        email: s.email ?? "",
+        website: s.website ?? "",
+        logo: s.logo ?? "",
+        invoicePrefix: s.invoicePrefix ?? "INV-",
+        quotationPrefix: s.quotationPrefix ?? "QT-",
+        invoiceStartNumber: s.invoiceStartNumber ?? 1001,
+        quotationStartNumber: s.quotationStartNumber ?? 1001,
+        remarks: Array.isArray(s.remarks) ? s.remarks : [],
+        bankDetails: {
+          accountName: s.bankDetails?.accountName ?? "",
+          bankName: s.bankDetails?.bankName ?? "",
+          accountNumber: s.bankDetails?.accountNumber ?? "",
+          ifscCode: s.bankDetails?.ifscCode ?? "",
+          branch: s.bankDetails?.branch ?? "",
+        },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -41,27 +83,32 @@ export function useSettings() {
     refresh();
   }, [refresh]);
 
+  const saveAllSettings = useCallback(
+    async (payload: Partial<UserSettings>) => {
+      const res = await upsertSettings({
+        companyName: payload.companyName,
+        address: payload.address,
+        gstNumber: payload.gstNumber,
+        phone: payload.phone,
+        email: payload.email,
+        website: payload.website,
+        logo: payload.logo,
+        invoicePrefix: payload.invoicePrefix,
+        quotationPrefix: payload.quotationPrefix,
+        invoiceStartNumber: payload.invoiceStartNumber,
+        quotationStartNumber: payload.quotationStartNumber,
+        remarks: payload.remarks,
+        bankDetails: payload.bankDetails,
+      });
+      await refresh();
+      return res;
+    },
+    [refresh]
+  );
+
   const saveRemarks = useCallback(
     async (remarks: string[]) => {
       const res = await updateRemarks(remarks);
-      await refresh();
-      return res;
-    },
-    [refresh]
-  );
-
-  const saveCompanyProfile = useCallback(
-    async (payload: UserSettings["companyProfile"]) => {
-      const res = await updateCompanyProfile(payload);
-      await refresh();
-      return res;
-    },
-    [refresh]
-  );
-
-  const saveInvoiceNumberSettings = useCallback(
-    async (payload: UserSettings["invoiceNumberSettings"]) => {
-      const res = await updateInvoiceNumberSettings(payload);
       await refresh();
       return res;
     },
@@ -74,8 +121,7 @@ export function useSettings() {
     error,
     refresh,
     saveRemarks,
-    saveCompanyProfile,
-    saveInvoiceNumberSettings,
+    saveAllSettings,
   };
 }
 

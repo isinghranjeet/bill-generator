@@ -20,11 +20,60 @@ export type InvoiceNumberSettings = {
   nextQuotationNumber: number;
 };
 
+export type BankDetailsUpdate = {
+  accountName: string;
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  branch: string;
+};
+
+// Full settings payload matching backend's settingsUpsertSchema
+export type SettingsUpsertPayload = {
+  companyName?: string;
+  address?: string;
+  gstNumber?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo?: string;
+  invoicePrefix?: string;
+  quotationPrefix?: string;
+  invoiceStartNumber?: number;
+  quotationStartNumber?: number;
+  remarks?: string[];
+  bankDetails?: BankDetailsUpdate;
+};
+
+export type SettingsResponse = {
+  ok: boolean;
+  settings: {
+    companyName: string;
+    address: string;
+    gstNumber: string;
+    phone: string;
+    email: string;
+    website: string;
+    logo: string;
+    invoicePrefix: string;
+    quotationPrefix: string;
+    invoiceStartNumber: number;
+    quotationStartNumber: number;
+    remarks: string[];
+    bankDetails: BankDetailsUpdate;
+  };
+};
+
 export async function fetchSettings() {
-  return apiFetch<{ ok: true; settings: object }>("/api/settings");
+  return apiFetch<SettingsResponse>("/api/settings");
 }
 
-
+export async function upsertSettings(payload: SettingsUpsertPayload) {
+  return apiFetch<SettingsResponse>("/api/settings", {
+    method: "POST",
+    body: payload,
+  });
+}
 
 export async function updateRemarks(remarks: string[]) {
   return apiFetch<{ ok: true }>("/api/settings/remarks", {
@@ -53,10 +102,27 @@ export async function getNextNumbers() {
   );
 }
 
-export async function consumeNextNumber(documentType: "invoice" | "quotation") {
-  return apiFetch<{ ok: true }>("/api/settings/consume-number", {
+export async function consumeNextNumber(documentType: string) {
+  // ----- NORMALIZE: only "invoice" or "quotation" allowed -----
+  const raw = documentType?.toLowerCase().trim() ?? "";
+  const normalized = raw === "quotation" ? "quotation" : "invoice";
+
+  console.log("[consumeNextNumber] original documentType:", documentType);
+  console.log("[consumeNextNumber] normalized documentType:", normalized);
+
+  if (normalized !== "invoice" && normalized !== "quotation") {
+    const errMsg = `Invalid documentType: "${documentType}". Must be "invoice" or "quotation".`;
+    console.error("[consumeNextNumber]", errMsg);
+    throw new Error(errMsg);
+  }
+
+  const payload = { documentType: normalized };
+  console.log("[consumeNextNumber] request payload:", JSON.stringify(payload));
+
+  return apiFetch<{ ok: true; invoiceNo?: string; quotationNo?: string }>("/api/settings/consume-number", {
     method: "POST",
-    body: { documentType },
+    body: payload,
   });
 }
+
 

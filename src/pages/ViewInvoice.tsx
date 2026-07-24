@@ -1,11 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { InvoiceHeader } from "@/components/invoice/InvoiceHeader";
-import { PartyDetails } from "@/components/invoice/PartyDetails";
-import { ItemsTable } from "@/components/invoice/ItemsTable";
-import { InvoiceSummary } from "@/components/invoice/InvoiceSummary";
-import { InvoiceFooter } from "@/components/invoice/InvoiceFooter";
+import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Download } from "lucide-react";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
@@ -110,48 +106,25 @@ const ViewInvoice = () => {
         </div>
 
         <div className="invoice-container">
-          <InvoiceHeader
+          <ProfessionalInvoice
             company={invoice.company}
+            consignee={invoice.consignee}
+            buyer={invoice.buyer}
             details={{
               ...invoice.details,
               invoiceTitle: invoice.details.invoiceTitle ?? "TAX INVOICE",
               date: new Date(invoice.details.date),
             }}
-            onCompanyChange={() => {}}
-            onDetailsChange={() => {}}
-            editable={false}
-          />
-
-          <div className="grid grid-cols-2 border-b border-border">
-            <div className="border-r border-border">
-              <PartyDetails
-                title="Consignee (Ship to)"
-                party={invoice.consignee}
-                onPartyChange={() => {}}
-                editable={false}
-              />
-            </div>
-            <div>
-              <PartyDetails
-                title="Buyer (Bill to)"
-                party={invoice.buyer}
-                onPartyChange={() => {}}
-                editable={false}
-              />
-            </div>
-          </div>
-
-          <ItemsTable items={invoice.items} onItemsChange={() => {}} editable={false} />
-
-          <InvoiceSummary
             items={invoice.items}
             remarks={invoice.remarks}
-            onRemarksChange={() => {}}
-            companyName={invoice.company.name}
             editable={false}
+            onCompanyChange={() => {}}
+            onConsigneeChange={() => {}}
+            onBuyerChange={() => {}}
+            onDetailsChange={() => {}}
+            onItemsChange={() => {}}
+            onRemarksChange={() => {}}
           />
-
-          <InvoiceFooter companyName={invoice.company.name} />
         </div>
       </div>
     </div>

@@ -64,6 +64,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Settings,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -107,6 +108,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { SettingsDrawer } from "@/components/settings";
 import { cn } from "@/lib/utils";
 
 
@@ -925,6 +927,7 @@ const AdminPortal = () => {
   });
 
   // State
+  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
@@ -1775,6 +1778,17 @@ const AdminPortal = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Settings Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSettingsDrawerOpen(true)}
+              className="shadow-sm"
+              title="Settings"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+
             {/* New Invoice Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2366,6 +2380,12 @@ const AdminPortal = () => {
           </CardContent>
         </Card>
       </main>
+
+      {/* Settings Drawer */}
+      <SettingsDrawer
+        open={settingsDrawerOpen}
+        onOpenChange={setSettingsDrawerOpen}
+      />
 
       {/* Report Dialog */}
       <ReportDialog

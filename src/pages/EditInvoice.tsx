@@ -20,6 +20,7 @@ import {
 import type { InvoiceData, InvoiceItem } from "@/types/invoice";
 
 import { generateInvoiceNumber } from "@/utils/calculations";
+
 import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
 import { putInvoice } from "@/lib/invoiceCache";
 
@@ -359,13 +360,22 @@ export default function EditInvoice() {
       return;
     }
 
-    const totals = computeTotalsFromItems(invoiceData.items);
+    // Use per-item totals already computed by ProfessionalInvoice (includes days, discount, correct GST)
+    const totalAmount = parseFloat(
+      invoiceData.items.reduce((sum, item) => sum + (item.total || 0), 0).toFixed(2)
+    );
+    const totalTax = parseFloat(
+      invoiceData.items.reduce(
+        (sum, item) => sum + (item.sgstAmount || 0) + (item.cgstAmount || 0) + (item.igstAmount || 0),
+        0
+      ).toFixed(2)
+    );
 
     const invoiceToSave: InvoiceData = {
       ...invoiceData,
-      totalAmount: totals.totalAmount,
-      totalTax: totals.totalTax,
-      totalAmountInWords: convertToWords(totals.grandTotal),
+      totalAmount,
+      totalTax,
+      totalAmountInWords: convertToWords(totalAmount),
     };
 
     try {

@@ -186,8 +186,8 @@ export function SettingsDrawerShell({
     } catch {
       // ignore
     }
-    toast.success("Logged out.");
-    navigate("/login");
+toast.success("Logged out.");
+    navigate("/auth", { replace: true });
   };
 
   const onAddOrUpdateRemark = () => {

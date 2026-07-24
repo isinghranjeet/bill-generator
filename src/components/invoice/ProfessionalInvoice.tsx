@@ -53,16 +53,7 @@ const GST_SUGGESTIONS = [0, 5, 12, 18, 28];
 // Fixed HSN code used for every line item on this invoice/quotation.
 const FIXED_HSN = "9973";
 
-// Fixed prefix for every invoice number. Only the part AFTER this prefix
-// is ever shown/edited in the input box.
-const INVOICE_NUMBER_PREFIX = "202605";
 
-// Generates a plain, human-readable quotation number (no "QTNO-" or any
-// other letter prefix — just digits).
-// Format: YYYYMMDDHHmm
-function generateQuotationNumber(): string {
-  return format(new Date(), 'yyyyMMddHHmm');
-}
 
 export const ProfessionalInvoice = React.memo(({
   company,
@@ -84,18 +75,13 @@ export const ProfessionalInvoice = React.memo(({
   // documentType is DERIVED, not stored separately and not synced via a
   // toggled override. This avoids render-order bugs and stale state.
   const documentType: DocumentType = useMemo(() => {
-    // Primary source of truth: CreateInvoice sets invoiceTitle to either
-    // "QUOTATION" or "TAX INVOICE".
     const title = (details.invoiceTitle || "").toLowerCase();
     if (title.includes("quotation")) return "quotation";
     if (title.includes("invoice")) return "invoice";
-
-    // Fallback heuristic (older saved data): prefer quotation when invoice
-    // number isn't present.
     if (details.quotationNo && !details.invoiceNo) return "quotation";
-
     return "invoice";
   }, [details.invoiceTitle, details.quotationNo, details.invoiceNo]);
+
 
   // Memoize totals calculation for performance (unchanged — this is the
   // pre-discount, per-item rollup used by the items table itself).
@@ -325,22 +311,7 @@ export const ProfessionalInvoice = React.memo(({
   // INVOICE / QUOTATION NUMBER
   // ---------------------------------------------------------------------
 
-  const invoiceNumberSuffix = useMemo(() => {
-    const raw = details.invoiceNo || "";
-    return raw.startsWith(INVOICE_NUMBER_PREFIX)
-      ? raw.slice(INVOICE_NUMBER_PREFIX.length)
-      : raw;
-  }, [details.invoiceNo]);
 
-  const handleInvoiceNumberSuffixChange = useCallback(
-    (suffix: string) => {
-      if (!onDetailsChange) return;
-      // Keep only digits in the editable part so the number stays clean.
-      const cleanSuffix = suffix.replace(/[^0-9]/g, "");
-      onDetailsChange({ ...details, invoiceNo: INVOICE_NUMBER_PREFIX + cleanSuffix });
-    },
-    [details, onDetailsChange]
-  );
 
   const handleQuotationNumberChange = useCallback(
     (value: string) => {
@@ -351,22 +322,7 @@ export const ProfessionalInvoice = React.memo(({
     [details, onDetailsChange]
   );
 
-  // Safety net: if invoice number is missing/empty, seed it with just the
-  // fixed prefix. If quotation number is missing, generate one. Guarded so
-  // it can never loop and never clobber an existing value.
-  React.useEffect(() => {
-    if (!onDetailsChange) return;
 
-    if (documentType === 'invoice' && !details.invoiceNo) {
-      onDetailsChange({ ...details, invoiceNo: INVOICE_NUMBER_PREFIX });
-      return;
-    }
-
-    if (documentType === 'quotation' && !details.quotationNo) {
-      onDetailsChange({ ...details, quotationNo: generateQuotationNumber() });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentType, details.invoiceNo, details.quotationNo]);
 
   // Render item row
   const renderItemRow = useCallback(
@@ -771,25 +727,23 @@ export const ProfessionalInvoice = React.memo(({
                     {editable && onDetailsChange ? (
                       <>
                         <div className="flex items-center print:hidden">
-                          <span className="text-xs font-medium mr-1 whitespace-nowrap">
-                            {INVOICE_NUMBER_PREFIX}
-                          </span>
                           <Input
-                            value={invoiceNumberSuffix}
-                            onChange={(e) => handleInvoiceNumberSuffixChange(e.target.value)}
+                            value={details.invoiceNo || ""}
+                            onChange={(e) => onDetailsChange?.({ ...details, invoiceNo: e.target.value })}
                             className="h-6 text-xs w-full"
-                            placeholder="Enter number"
-                            inputMode="numeric"
+                            placeholder="Invoice No"
                           />
                         </div>
                         <span className="hidden print:block text-xs print:text-[7px] font-medium">
-                          {details.invoiceNo || INVOICE_NUMBER_PREFIX}
+                          {details.invoiceNo || "-"}
                         </span>
+
                       </>
                     ) : (
-                      <span className="font-medium text-xs print:text-[7px] print:font-normal">
-                        {details.invoiceNo || INVOICE_NUMBER_PREFIX}
+                    <span className="font-medium text-xs print:text-[7px] print:font-normal">
+                        {details.invoiceNo || "-"}
                       </span>
+
                     )}
                   </div>
                 ) : (

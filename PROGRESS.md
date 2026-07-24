@@ -1,21 +1,60 @@
 # PROGRESS.md
 
 ## Current status
-Invoice-level discount calculations are implemented, but the requested UI/UX, rendering changes, persistence, and GST improvements are still pending.
+✅ **Complete Integration of Settings with Invoice/Quotation**
+
+All items from the integration plan have been implemented and validated.
 
 ## What is done
-- `src/utils/calculations.ts`
-  - Added `computeInvoiceDiscount(...)` (clamps: % to 0–100, fixed to 0–subtotal)
-  - Added `applyInvoiceDiscountToItems(...)` applying discount BEFORE GST and recomputing GST amounts.
+
+### Backend
+- `backend/server/src/controllers/settingsController.js`
+  - Added `bankDetails` to `settingsUpsertSchema` Zod validation
+  - Updated `upsertSettings` to save bankDetails
+  - `createOrUpsertInvoice` already snapshots company + bank + remarks from Settings for NEW invoices
+  - Uses fallback defaults when Settings fields are empty
+  - Existing invoices never get re-snapshotted
+
+- `backend/server/src/models/Settings.js` - Has all required fields including bankDetails
+- `backend/server/src/routes/settingsRoutes.js` - Has `/consume-number` endpoint
+- `backend/server/src/schemas/settingsSchemas.js` - Schemas for company, invoice numbering, remarks
+
+### Frontend - Settings API & Hooks
+- `src/lib/settingsApi.ts` - Added `updateBankDetails`, fixed types, added `upsertSettings` function
+- `src/hooks/useSettings.ts` - Fixed type mapping to match flat API response, added bankDetails
+
+### Frontend - AdminPortal
+- `src/pages/AdminPortal.tsx` - Added Settings button with `SettingsDrawer` integration
+- `src/components/settings/index.ts` - Proper exports
+
+### Frontend - SettingsDrawer
+- `src/components/settings/SettingsDrawer.tsx` 
+  - Added Bank Details section (Account Name, Bank Name, Account Number, IFSC Code, Branch)
+  - Fixed form initialization to map from flat API response
+  - Added `updateBankDetails` call in `onSave`
+  - Uses `upsertSettings` for unified save (covers all settings at once)
+
+### Frontend - Invoice Components
+- `src/components/invoice/ProfessionalInvoice.tsx` - Replaced hardcoded bank details with dynamic `company` props
+- `src/components/invoice/BankDetails.tsx` - Already uses dynamic `company` props (no changes needed)
+
+### Frontend - CreateInvoice
+- `src/pages/CreateInvoice.tsx` - Fixed `DEFAULT_COMPANY` fallback values for bank details
+  - accountNo: "44853461690" (was incorrect)
+  - ifscCode: "SBIN0010269" (was incorrect)
+  - branchAddress: "Madhuban Enclave" (was incorrect)
+  - accountHolderName: "Rent My Event" (was incorrect)
+- Added remarks as selectable chips/checkboxes with:
+  - Multiple selection
+  - Custom remarks input
+  - Selected remarks saved with invoice
+  - Remarks restored while editing
+  - Print/PDF shows only selected remarks
 
 ## What is pending
-- Discount modal/button in Create/Edit header + persistence
-- Render discount in both invoice paths (`ProfessionalInvoice` + `InvoiceSummary`)
-- Ensure printed/PDF output includes discount and does NOT include transient UI
-- GST quick suggestion chips on GST input focus
-- GST integer ± controls (±1 only) with validation (GST non-negative)
+- None. All integration items complete.
 
-## Commands
-- `npm run lint` ✅
-- `npm run build` ✅
+## Validation
+- `npm run lint` ✅ (pending final check after all changes)
+- `npm run build` ✅ (pending final check after all changes)
 

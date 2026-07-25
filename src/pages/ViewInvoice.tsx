@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Printer, Download } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
 import type { InvoiceData } from "@/types/invoice";
 import { getCachedInvoice } from "@/lib/invoiceCache";
@@ -15,8 +15,17 @@ const ViewInvoice = () => {
   const { invoiceNo } = useParams<{ invoiceNo: string }>();
   const navigate = useNavigate();
 
-  const [invoice, setInvoice] = useState<InvoiceResponse | null>(null);
+const [invoice, setInvoice] = useState<InvoiceResponse | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // DEBUG: Log the raw URL param received by ViewInvoice
+    console.log("[DEBUG ViewInvoice] invoiceNo from URL params:", JSON.stringify(invoiceNo));
+    console.log("[DEBUG ViewInvoice] invoiceNo type:", typeof invoiceNo);
+    console.log("[DEBUG ViewInvoice] invoiceNo length:", invoiceNo?.length);
+    console.log("[DEBUG ViewInvoice] decoded:", decodeURIComponent(invoiceNo || ""));
+    console.log("[DEBUG ViewInvoice] decoded charCodes:", Array.from(decodeURIComponent(invoiceNo || "")).map(c => c.charCodeAt(0)));
+  }, [invoiceNo]);
 
   useEffect(() => {
     let mounted = true;
@@ -30,17 +39,22 @@ const ViewInvoice = () => {
       // Offline-first: show cached invoice immediately if available
       const cached = getCachedInvoice(decodeURIComponent(invoiceNo));
       if (mounted && cached) {
+        console.log("[DEBUG ViewInvoice] Found in cache:", cached.details?.invoiceNo);
         setInvoice(cached as unknown as InvoiceResponse);
         setLoading(false);
       }
 
       try {
         setLoading(true);
-        const res = await getInvoiceApi(decodeURIComponent(invoiceNo));
+        const decoded = decodeURIComponent(invoiceNo);
+        console.log("[DEBUG ViewInvoice] Calling getInvoiceApi with:", JSON.stringify(decoded));
+        const res = await getInvoiceApi(decoded);
+        console.log("[DEBUG ViewInvoice] API response received:", res ? "OK" : "null");
         if (mounted) {
           setInvoice(res as unknown as InvoiceResponse);
         }
       } catch (e) {
+        console.error("[DEBUG ViewInvoice] API call failed:", e);
         if (mounted) {
           toast.error(e instanceof Error ? e.message : "Failed to load invoice");
           // keep cached view if we have it
@@ -58,7 +72,7 @@ const ViewInvoice = () => {
     };
   }, [invoiceNo]);
 
-  const handlePrint = () => {
+const handlePrint = () => {
     toast.dismiss();
     window.print();
   };
@@ -93,11 +107,7 @@ const ViewInvoice = () => {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Admin
           </Button>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handlePrint}>
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
-            </Button>
+<div className="flex items-center gap-2">
             <Button onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-2" />
               Print
@@ -113,7 +123,11 @@ const ViewInvoice = () => {
             details={{
               ...invoice.details,
               invoiceTitle: invoice.details.invoiceTitle ?? "TAX INVOICE",
-              date: new Date(invoice.details.date),
+              date: (() => {
+                const raw = invoice.details.date as unknown;
+                const d = raw instanceof Date ? raw : new Date(String(raw));
+                return Number.isNaN(d.getTime()) ? new Date() : d;
+              })(),
             }}
             items={invoice.items}
             remarks={invoice.remarks}

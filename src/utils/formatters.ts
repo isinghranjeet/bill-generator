@@ -38,6 +38,40 @@ export const formatDateFull = (date: Date): string => {
   }).format(date);
 };
 
+export const convertToWords = (num: number): string => {
+  if (num === 0) return "Zero Rupees Only";
+
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+
+  function convertBelow1000(n: number): string {
+    if (n === 0) return '';
+    if (n < 10) return ones[n];
+    if (n < 20) return teens[n - 10];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+    return (
+      ones[Math.floor(n / 100)] +
+      ' Hundred' +
+      (n % 100 !== 0 ? ' and ' + convertBelow1000(n % 100) : '')
+    );
+  }
+
+  const crore = Math.floor(num / 10000000);
+  const lakh = Math.floor((num % 10000000) / 100000);
+  const thousand = Math.floor((num % 100000) / 1000);
+  const remainder = Math.floor(num % 1000);
+
+  let result = '';
+
+  if (crore > 0) result += convertBelow1000(crore) + ' Crore ';
+  if (lakh > 0) result += convertBelow1000(lakh) + ' Lakh ';
+  if (thousand > 0) result += convertBelow1000(thousand) + ' Thousand ';
+  if (remainder > 0) result += convertBelow1000(remainder);
+
+  return (result.trim() + ' Rupees Only').replace(/\s+/g, ' ');
+};
+
 export const numberToWords = (num: number): string => {
   const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
     'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];

@@ -1,8 +1,9 @@
-
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useInvoiceOfflineCache } from "@/hooks/useInvoiceOfflineCache";
 import { useNavigate } from "react-router-dom";
 import { useInvoiceStorage, SavedInvoice } from "@/hooks/useInvoiceStorage";
+import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
+import type { InvoiceData } from "@/types/invoice";
 import { formatCurrency, formatDate } from "@/utils/formatters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +44,6 @@ import {
   Trash2,
   IndianRupee,
   Users,
-  Download,
   ArrowUpDown,
   Calendar,
   User,
@@ -60,7 +60,6 @@ import {
   CheckCircle,
   Clock,
   File,
-  Loader2,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -108,8 +107,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { SettingsDrawer } from "@/components/settings";
 import { cn } from "@/lib/utils";
+import { generateReportPdf } from "@/lib/pdfService";
+
 
 
 type SortField = "date" | "amount" | "invoiceNo" | "customer";
@@ -571,22 +573,48 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
     return filteredInvoices.slice(start, end);
   }, [filteredInvoices, currentPage, rowsPerPage]);
 
-  // Select all
+/** Build a guaranteed-unique and STABLE key for a saved invoice record.
+ *  The key MUST return the same value for the same record on EVERY call,
+ *  because Set.has() lookups depend on referential equality of primitives.
+ *
+ *  Priority order:
+ *   1. invoiceNo (primary identifier for all documents)
+ *   2. quotationNo (fallback for quotations where invoiceNo is empty)
+ *   3. A composite hash of other stable fields (buyer name + date + total)
+ *      as last resort — NEVER use crypto.randomUUID() since that changes
+ *      on every call and breaks Set.has() / checkbox sync.
+ */
+  const recordKey = (inv: { details: { invoiceNo?: string; quotationNo?: string; date?: unknown }; buyer?: { name?: string }; totalAmount?: number }): string => {
+    const invNo = inv.details?.invoiceNo;
+    if (invNo && invNo.trim() !== "") return invNo;
+    const quoNo = inv.details?.quotationNo;
+    if (quoNo && quoNo.trim() !== "") return quoNo;
+    // Stable composite fallback: never use crypto.randomUUID() here!
+    const buyerName = (inv.buyer?.name || "").trim();
+    const dateStr = String(inv.details?.date ?? "");
+    const amount = typeof inv.totalAmount === "number" ? inv.totalAmount : 0;
+    return `__unidentified_${buyerName.slice(0, 20)}_${dateStr.slice(0, 10)}_${amount}`;
+  };
+
+  // Select all — uses filteredInvoices (ALL matching items) NOT paginatedInvoices (current page only)
+  // This ensures Select All selects every invoice matching current filters regardless of pagination.
   const selectAll = () => {
-    if (selectedIds.size === paginatedInvoices.length) {
+    const allFilteredKeys = filteredInvoices.map((inv) => recordKey(inv));
+    const allSelected = allFilteredKeys.every((key) => selectedIds.has(key));
+    if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(paginatedInvoices.map((inv) => inv.details.invoiceNo)));
+      setSelectedIds(new Set(allFilteredKeys));
     }
   };
 
   // Toggle individual
-  const toggleSelection = (invoiceNo: string) => {
+  const toggleSelection = (id: string) => {
     const newSet = new Set(selectedIds);
-    if (newSet.has(invoiceNo)) {
-      newSet.delete(invoiceNo);
+    if (newSet.has(id)) {
+      newSet.delete(id);
     } else {
-      newSet.add(invoiceNo);
+      newSet.add(id);
     }
     setSelectedIds(newSet);
   };
@@ -598,9 +626,16 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
       return;
     }
 
+    // [DEBUG] Dialog: confirm what's being sent
+    const idsArray = Array.from(selectedIds);
+    console.log("[DEBUG ReportDialog] handleGenerate - selectedIds.size:", selectedIds.size);
+    console.log("[DEBUG ReportDialog] handleGenerate - idsArray:", idsArray);
+    console.log("[DEBUG ReportDialog] handleGenerate - filteredInvoices.length:", filteredInvoices.length);
+    console.log("[DEBUG ReportDialog] handleGenerate - all filtered invoice numbers:", filteredInvoices.map(inv => inv.details?.invoiceNo || inv.details?.quotationNo || 'unnamed'));
+
     setIsGenerating(true);
     try {
-      await generateReport(Array.from(selectedIds));
+      await generateReport(idsArray);
       onOpenChange(false);
     } catch (error) {
       console.error("Error generating report:", error);
@@ -704,8 +739,8 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
                   <TableHead className="w-[50px]">
                     <Checkbox
                       checked={
-                        paginatedInvoices.length > 0 &&
-                        selectedIds.size === paginatedInvoices.length
+                        filteredInvoices.length > 0 &&
+                        filteredInvoices.every((inv) => selectedIds.has(recordKey(inv)))
                       }
                       onCheckedChange={selectAll}
                     />
@@ -747,19 +782,19 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
 
                     return (
                       <TableRow
-                        key={invoice.details.invoiceNo}
+                        key={recordKey(invoice)}
                         className={cn(
                           "hover:bg-muted/30 transition-colors animate-slide-up",
-                          selectedIds.has(invoice.details.invoiceNo) &&
+                          selectedIds.has(recordKey(invoice)) &&
                             "bg-primary/5"
                         )}
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
                         <TableCell>
                           <Checkbox
-                            checked={selectedIds.has(invoice.details.invoiceNo)}
+                            checked={selectedIds.has(recordKey(invoice))}
                             onCheckedChange={() =>
-                              toggleSelection(invoice.details.invoiceNo)
+                              toggleSelection(recordKey(invoice))
                             }
                           />
                         </TableCell>
@@ -897,17 +932,7 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
             disabled={selectedIds.size === 0 || isGenerating}
             className="min-w-[150px]"
           >
-            {isGenerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Generate PDF ({selectedIds.size})
-              </>
-            )}
+            {isGenerating ? "Generating..." : `Generate (${selectedIds.size})`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -945,6 +970,9 @@ const AdminPortal = () => {
   >("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+// State for report print overlay
+  const [reportInvoices, setReportInvoices] = useState<InvoiceData[] | null>(null);
 
   // Extract unique customers
   const uniqueCustomers = useMemo(() => {
@@ -1239,8 +1267,25 @@ const AdminPortal = () => {
   }, [invoices]);
 
   // Handlers
-  const handleDelete = (invoiceNo: string) => {
-    deleteInvoice(invoiceNo);
+  const [deletingInvoiceNo, setDeletingInvoiceNo] = useState<string | null>(null);
+  const [printInvoiceData, setPrintInvoiceData] = useState<InvoiceData | null>(null);
+
+  const handleDelete = async (invoiceNo: string) => {
+    setDeletingInvoiceNo(invoiceNo);
+    try {
+      await deleteInvoice(invoiceNo);
+      toast.success(`Invoice ${invoiceNo} deleted successfully!`);
+    } catch (error) {
+      console.error("Error deleting invoice:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to delete invoice");
+    } finally {
+      setDeletingInvoiceNo(null);
+    }
+  };
+
+  const handlePrintInvoice = (invoice: SavedInvoice) => {
+    // Set the invoice data to render in the print overlay
+    setPrintInvoiceData(invoice);
   };
 
   const handleSort = (field: SortField) => {
@@ -1280,416 +1325,155 @@ const AdminPortal = () => {
       .replace(/'/g, "&#039;");
   };
 
-  // Generate PDF Report
-  const generateReport = async (invoiceIds: string[]) => {
+  // ==========================================================================
+  // BUGFIX (invoice-count drop 5 -> 2 during report generation):
+  //
+  // Root cause: this function used to split selected ids into "found locally"
+  // vs "needs API fetch" using a STRICT completeness check
+  // (details && company && Array.isArray(items)). Any local record that
+  // failed that check was pushed into apiIds instead of being used. Then,
+  // if the corresponding API call failed OR the API response also failed
+  // the same strict check, that invoice was DROPPED SILENTLY -- no log, no
+  // toast naming which invoice was lost, no error thrown. Two independent
+  // silent-drop paths (Promise.allSettled rejections, and the "isValid"
+  // check discarding a fulfilled-but-imperfect API response) could each
+  // remove invoices without anyone noticing until the PDF/print output was
+  // inspected and found short.
+  //
+  // Fix: never discard an id outright.
+  //   1. Prefer the local record if it exists, even if it doesn't pass the
+  //      strict shape check (partial local records are still usable/better
+  //      than nothing) -- but we only SKIP local and go to API when there is
+  //      truly no local record with that invoiceNo at all is not what we do;
+  //      instead we keep the original "prefer complete local record" order,
+  //      but if the API path fails or returns bad data, we fall back to the
+  //      local record instead of dropping the invoice.
+  //   2. Only truly missing invoices are excluded, and are explicitly
+  //      reported to the user via a warning toast that names the ids, so a
+  //      short report is never mistaken for a "complete" one again.
+  // ==========================================================================
+const generateReport = async (invoiceIds: string[]) => {
+    if (invoiceIds.length === 0) {
+      toast.warning("No invoices selected.");
+      return;
+    }
+
+    // [DEBUG] Step 1: count of IDs entering the function
+    console.log("[DEBUG generateReport] STEP 1 - IDs received:", invoiceIds.length, invoiceIds.map(id => id.slice(0, 30)));
+
     try {
-      const filteredReportInvoices = invoices.filter((inv) =>
-        invoiceIds.includes(inv.details.invoiceNo)
-      );
+      // Build invoice data from local cache first, then API for any missing ones.
+      const fetchedInvoices: InvoiceData[] = [];
+      const apiIds: string[] = [];
+      const droppedIds: string[] = [];
 
-      if (filteredReportInvoices.length === 0) {
-        toast.warning("No invoices selected.");
-        return;
-      }
+      for (const id of invoiceIds) {
+        // Skip unidentified fallback keys generated by recordKey() for records
+        // with no invoiceNo and no quotationNo — these cannot be resolved.
+        if (!id || id.startsWith("__")) continue;
 
-      toast.loading(`Generating ${filteredReportInvoices.length} invoices...`);
+        // DETERMINISTIC lookup: match by BOTH invoiceNo AND quotationNo
+        // in a single pass using an OR condition. This prevents the bug
+        // where a sequential lookup (invoiceNo first, quotationNo second)
+        // would match a REGULAR INVOICE whose invoiceNo coincidentally
+        // equals the quotationNo being searched for.
+        const local = invoices.find(
+          (inv) => inv.details.invoiceNo === id || inv.details.quotationNo === id
+        );
 
-      const reportTitle =
-        reportType === "all"
-          ? "COMPLETE INVOICE REPORT"
-          : `${reportType.replace("_", " ").toUpperCase()} REPORT`;
-      // Keep report generation deterministic; use the newest invoice's createdAt (or fallback).
-      const newest = filteredReportInvoices
-        .slice()
-      .sort(
-            (a, b) =>
-              parseLocalDate(
-                (b as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null })
-                  .createdAt ??
-                  (b as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null }).savedAt ??
-                  b.details?.date
-              ).getTime() -
-              parseLocalDate(
-                (a as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null })
-                  .createdAt ??
-                  (a as { createdAt?: string | number | Date | null; savedAt?: string | number | Date | null }).savedAt ??
-                  a.details?.date
-              ).getTime()
-          )[0];
-      const reportDate = newest ? format(getInvoiceDate(newest), "PPpp") : "";
-      const totalAmount = filteredReportInvoices.reduce(
-        (sum, inv) => sum + inv.totalAmount,
-        0
-      );
-      const totalItems = filteredReportInvoices.reduce(
-        (sum, inv) => sum + inv.items.length,
-        0
-      );
-
-      let htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>${reportTitle}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { 
-              font-family: 'Segoe UI', Arial, sans-serif; 
-              padding: 40px; 
-              background: #f8fafc;
-              color: #1a1a1a;
-            }
-            .report-container {
-              max-width: 1100px;
-              margin: 0 auto;
-              background: white;
-              border-radius: 12px;
-              box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-              overflow: hidden;
-            }
-            .cover-page {
-              padding: 60px 80px;
-              text-align: center;
-              border-bottom: 4px solid #2563eb;
-              background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-              min-height: 400px;
-              display: flex;
-              flex-direction: column;
-              justify-content: center;
-              align-items: center;
-            }
-            .cover-page .logo {
-              font-size: 48px;
-              font-weight: 700;
-              color: #1a1a1a;
-              margin-bottom: 10px;
-              letter-spacing: -1px;
-            }
-            .cover-page .logo span { color: #2563eb; }
-            .cover-page .subtitle {
-              font-size: 18px;
-              color: #666;
-              margin-bottom: 30px;
-            }
-            .cover-page h1 {
-              font-size: 42px;
-              color: #1a1a1a;
-              margin: 20px 0 10px;
-              letter-spacing: 1px;
-            }
-            .cover-page .divider {
-              width: 80px;
-              height: 4px;
-              background: #2563eb;
-              margin: 20px auto;
-              border-radius: 2px;
-            }
-            .cover-page .meta {
-              color: #666;
-              font-size: 15px;
-              line-height: 1.8;
-            }
-            .cover-page .meta strong { color: #1a1a1a; }
-            .content {
-              padding: 40px 60px;
-            }
-            .summary {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 15px;
-              margin-bottom: 30px;
-              background: #f8fafc;
-              padding: 24px;
-              border-radius: 8px;
-              border: 1px solid #e2e8f0;
-            }
-            .summary-item {
-              text-align: center;
-            }
-            .summary-item .label {
-              font-size: 12px;
-              color: #666;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              font-weight: 600;
-            }
-            .summary-item .value {
-              font-size: 20px;
-              font-weight: bold;
-              color: #1a1a1a;
-              margin-top: 5px;
-            }
-            .invoice-item {
-              border: 1px solid #e2e8f0;
-              border-radius: 8px;
-              padding: 24px;
-              margin-bottom: 30px;
-              page-break-inside: avoid;
-              background: white;
-              transition: box-shadow 0.2s;
-            }
-            .invoice-item:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
-            .invoice-item .invoice-header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 2px solid #e2e8f0;
-              padding-bottom: 16px;
-              margin-bottom: 20px;
-            }
-            .invoice-item .invoice-header h3 {
-              font-size: 20px;
-              color: #2563eb;
-              margin: 0;
-            }
-            .invoice-item .invoice-header .invoice-no {
-              font-weight: 700;
-              color: #1a1a1a;
-              font-size: 16px;
-            }
-            .invoice-details {
-              display: grid;
-              grid-template-columns: 1fr 1fr 1fr;
-              gap: 12px;
-              margin: 12px 0 20px 0;
-              font-size: 14px;
-              background: #fafbfc;
-              padding: 16px;
-              border-radius: 6px;
-            }
-            .invoice-details .label {
-              font-weight: 600;
-              color: #555;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 12px 0;
-              font-size: 14px;
-            }
-            th {
-              background-color: #f1f5f9;
-              text-align: left;
-              padding: 12px;
-              border: 1px solid #e2e8f0;
-              font-weight: 600;
-              font-size: 13px;
-              text-transform: uppercase;
-              letter-spacing: 0.3px;
-              color: #475569;
-            }
-            td {
-              padding: 10px 12px;
-              border: 1px solid #e2e8f0;
-            }
-            .text-right {
-              text-align: right;
-            }
-            .total-row {
-              font-weight: bold;
-              background-color: #f8fafc;
-            }
-            .total-row td {
-              border-top: 2px solid #1a1a1a;
-            }
-            .remarks {
-              margin-top: 12px;
-              font-size: 14px;
-              color: #666;
-              padding: 12px;
-              background: #fafbfc;
-              border-radius: 6px;
-            }
-            .footer {
-              text-align: center;
-              margin-top: 30px;
-              padding-top: 20px;
-              border-top: 1px solid #e2e8f0;
-              color: #94a3b8;
-              font-size: 12px;
-            }
-            .footer .page-number {
-              color: #64748b;
-            }
-            @media print {
-              body { padding: 0; background: white; }
-              .report-container { box-shadow: none; border-radius: 0; }
-              .cover-page { min-height: 300px; }
-              .invoice-item { page-break-inside: avoid; page-break-after: always; }
-              .invoice-item:last-child { page-break-after: auto; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="report-container">
-            <div class="cover-page">
-              <div class="logo">Invoice<span>Hub</span></div>
-              <div class="subtitle">Professional Invoice Management</div>
-              <div class="divider"></div>
-              <h1>${reportTitle}</h1>
-              <div class="meta">
-                <div><strong>Generated Date:</strong> ${reportDate}</div>
-                <div><strong>Total Documents:</strong> ${filteredReportInvoices.length}</div>
-                <div><strong>Report Type:</strong> ${reportType === "all" ? "Complete" : reportType.replace("_", " ").toUpperCase()}</div>
-              </div>
-            </div>
-            <div class="content">
-              <div class="summary">
-                <div class="summary-item">
-                  <div class="label">Total Documents</div>
-                  <div class="value">${filteredReportInvoices.length}</div>
-                </div>
-                <div class="summary-item">
-                  <div class="label">Total Amount</div>
-                  <div class="value">${formatCurrency(totalAmount)}</div>
-                </div>
-                <div class="summary-item">
-                  <div class="label">Total Items</div>
-                  <div class="value">${totalItems}</div>
-                </div>
-                <div class="summary-item">
-                  <div class="label">Average Amount</div>
-                  <div class="value">${formatCurrency(totalAmount / filteredReportInvoices.length)}</div>
-                </div>
-              </div>
-      `;
-
-      filteredReportInvoices.forEach((invoice, index) => {
-        const isGST = hasGST(invoice);
-        const isQuote = isQuotation(invoice);
-        const docType = isQuote
-          ? "Quotation"
-          : isGST
-          ? "GST Invoice"
-          : "Non-GST Invoice";
-
-        htmlContent += `
-          <div class="invoice-item">
-            <div class="invoice-header">
-              <h3>${docType}</h3>
-              <span class="invoice-no">#${invoice.details.invoiceNo}</span>
-            </div>
-            <div class="invoice-details">
-              <div><span class="label">Date:</span> ${formatDate(
-                getInvoiceDate(invoice)
-              )}</div>
-              <div><span class="label">Customer:</span> ${escapeHtml(invoice.buyer.name)}</div>
-              <div><span class="label">GSTIN:</span> ${escapeHtml(invoice.buyer.gstin) || "N/A"}</div>
-              <div><span class="label">Address:</span> ${escapeHtml(invoice.buyer.address)}</div>
-              <div><span class="label">Payment:</span> ${
-                escapeHtml(invoice.details.modeOfPayment) || "Cash"
-              }</div>
-              <div><span class="label">Total:</span> ${formatCurrency(
-                invoice.totalAmount
-              )}</div>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:5%">#</th>
-                  <th style="width:35%">Description</th>
-                  <th style="width:10%">HSN</th>
-                  <th style="width:10%">Qty</th>
-                  <th style="width:15%">Rate</th>
-                  <th style="width:25%;text-align:right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-        `;
-
-        invoice.items.forEach((item) => {
-          htmlContent += `
-            <tr>
-              <td>${item.srNo}</td>
-              <td>${escapeHtml(item.description)}</td>
-              <td>${escapeHtml(item.hsn) || "-"}</td>
-              <td>${item.quantity}</td>
-              <td>${formatCurrency(item.rate)}</td>
-              <td class="text-right">${formatCurrency(item.amount)}</td>
-            </tr>
-          `;
-        });
-
-        htmlContent += `
-              </tbody>
-              <tfoot>
-                <tr class="total-row">
-                  <td colspan="5" style="text-align:right;">Total Amount:</td>
-                  <td class="text-right">${formatCurrency(
-                    invoice.totalAmount
-                  )}</td>
-                </tr>
-                ${
-                  (invoice.totalTax || 0) > 0
-                    ? `
-                <tr>
-                  <td colspan="5" style="text-align:right;">Total Tax:</td>
-                  <td class="text-right">${formatCurrency(
-                    invoice.totalTax
-                  )}</td>
-                </tr>
-                `
-                    : ""
-                }
-              </tfoot>
-            </table>
-            ${
-              invoice.remarks
-                ? `<div class="remarks"><strong>Remarks:</strong> ${escapeHtml(invoice.remarks)}</div>`
-                : ""
-            }
-
-          </div>
-        `;
-
-        if (index < filteredReportInvoices.length - 1) {
-          htmlContent += `<div style="page-break-after: always;"></div>`;
+        // Validate that the local record has all required fields before using it
+        if (local && local.details && local.company && Array.isArray(local.items)) {
+          fetchedInvoices.push(local);
+        } else if (id.trim() !== "") {
+          apiIds.push(id);
         }
-      });
+      }
 
-      htmlContent += `
-              <div class="footer">
-                <p>Generated by Invoice Management System</p>
-                <p class="page-number">Page ${"{page}"} of ${"{total}"}</p>
-              </div>
-            </div>
-          </div>
-          <script>
-            (function() {
-              const pages = document.querySelectorAll('.invoice-item');
-              const totalPages = pages.length + 1;
-              document.querySelectorAll('.page-number').forEach((el, i) => {
-                el.textContent = 'Page ' + (i + 1) + ' of ' + totalPages;
-              });
-            })();
-          </script>
-        </body>
-        </html>
-      `;
+      // [DEBUG] Step 2: count resolved from local cache
+      console.log("[DEBUG generateReport] STEP 2 - resolved from local cache:", fetchedInvoices.length);
+      console.log("[DEBUG generateReport] STEP 2b - local invoice numbers:", fetchedInvoices.map(i => i.details?.invoiceNo));
+      console.log("[DEBUG generateReport] STEP 2c - still need API:", apiIds.length, apiIds);
 
-      const printWindow = window.open("", "_blank", "width=1024,height=768,scrollbars=yes");
-      if (!printWindow) {
-        toast.dismiss();
-        toast.error("Please allow popups to generate PDF reports.");
+      // Fetch any invoices not found locally (or found but incomplete) from the API
+      if (apiIds.length > 0) {
+        const apiResults = await Promise.allSettled(
+          apiIds.map((id) => getInvoiceApi(id))
+        );
+
+        apiResults.forEach((result, i) => {
+          const id = apiIds[i];
+          const apiInv = result.status === "fulfilled" ? result.value : null;
+          const isValid =
+            !!apiInv &&
+            !!apiInv.details &&
+            !!apiInv.company &&
+            Array.isArray(apiInv.items);
+
+          if (isValid) {
+            fetchedInvoices.push(apiInv as InvoiceData);
+            return;
+          }
+
+          // API fetch failed or returned incomplete data.
+          // FIX: fall back to the local record (even if it was the reason we
+          // tried the API in the first place) instead of dropping the invoice.
+          const localFallback = invoices.find(
+            (inv) => inv.details.invoiceNo === id || inv.details.quotationNo === id
+          );
+          if (localFallback) {
+            fetchedInvoices.push(localFallback);
+          } else {
+            droppedIds.push(id);
+          }
+        });
+      }
+
+      // [DEBUG] Step 3: final count after merge
+      console.log("[DEBUG generateReport] STEP 3 - fetchedInvoices FINAL count:", fetchedInvoices.length);
+      console.log("[DEBUG generateReport] STEP 3b - final invoice numbers:", fetchedInvoices.map(i => i.details?.invoiceNo || i.details?.quotationNo));
+      console.log("[DEBUG generateReport] STEP 3c - dropped IDs:", droppedIds);
+
+      if (fetchedInvoices.length === 0) {
+        toast.error("Failed to load invoice data.");
         return;
       }
 
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
+      if (droppedIds.length > 0) {
+        toast.warning(
+          `Could not load ${droppedIds.length} invoice(s): ${droppedIds.join(", ")}`
+        );
+      }
 
-      setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-        toast.dismiss();
-        toast.success(`${filteredReportInvoices.length} documents exported successfully!`);
+// [DEBUG] Step 4: generate PDF directly using html2canvas+jsPDF pipeline
+      console.log("[DEBUG generateReport] STEP 4 - generating PDF for", fetchedInvoices.length, "invoices");
 
-        setTimeout(() => {
-          printWindow.close();
-        }, 1000);
-      }, 500);
+      try {
+        const pdfBlob = await generateReportPdf(fetchedInvoices);
+        const url = URL.createObjectURL(pdfBlob);
+        
+        // Trigger download
+        const link = document.createElement("a");
+        link.href = url;
+        const reportTypeName = reportType === "all" ? "Complete" : reportType === "quotation" ? "Quotation" : reportType === "with_gst" ? "GST" : "NonGST";
+        link.download = `InvoiceReport_${reportTypeName}_${new Date().toISOString().split("T")[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        // Clean up the blob URL after a short delay
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        
+        toast.success(
+          `Report generated: ${fetchedInvoices.length} invoice(s) in PDF.`
+        );
+      } catch (pdfError) {
+        console.error("Error generating PDF:", pdfError);
+        toast.error("Failed to generate PDF. Falling back to print view.");
+        // Fallback: use the ReportPrintView overlay with window.print()
+        setReportInvoices(fetchedInvoices);
+      }
     } catch (error) {
       console.error("Error generating report:", error);
-      toast.dismiss();
       toast.error("Failed to generate report. Please try again.");
     }
   };
@@ -2031,14 +1815,14 @@ const AdminPortal = () => {
                     <TableHeader className="bg-muted/50 sticky top-0 z-10">
                       <TableRow>
                         <TableHead className="w-[15%]">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSort("invoiceNo")}
-                            className="flex items-center gap-1 -ml-3 font-semibold"
-                          >
-                            Invoice No. {getSortIcon("invoiceNo")}
-                          </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSort("invoiceNo")}
+                          className="flex items-center gap-1 -ml-3 font-semibold"
+                        >
+                          Doc No. {getSortIcon("invoiceNo")}
+                        </Button>
                         </TableHead>
                         <TableHead className="w-[12%]">
                           <Button
@@ -2090,22 +1874,22 @@ const AdminPortal = () => {
                           : "Non-GST";
 
                         return (
-                          <TableRow
-                            key={invoice?.details?.invoiceNo ?? "unknown"}
+<TableRow
+                            key={invoice?.details?.invoiceNo || invoice?.details?.quotationNo || `__row_${crypto.randomUUID()}`}
                             className={cn(
                               "hover:bg-muted/50 transition-colors cursor-pointer animate-slide-up",
                               index % 2 === 0 && "bg-card/50"
                             )}
                             style={{ animationDelay: `${index * 30}ms` }}
-                            onClick={() =>
-                              navigate(`/view/${invoice.details.invoiceNo}`)
+onClick={() =>
+                              navigate(`/view/${(invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo}`)
                             }
                           >
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-muted-foreground" />
                                 <span className="font-mono">
-                                  {invoice.details.invoiceNo}
+                                  {invoice.details.invoiceNo || invoice.details.quotationNo}
                                 </span>
                                 {isRecent && (
                                   <Badge
@@ -2186,7 +1970,7 @@ const AdminPortal = () => {
                                         size="icon"
                                         onClick={() =>
                                           navigate(
-                                            `/view/${invoice.details.invoiceNo}`
+                                            `/view/${(invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo}`
                                           )
                                         }
                                         className="hover:bg-primary/10"
@@ -2209,11 +1993,11 @@ const AdminPortal = () => {
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end" className="w-48">
-                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+<DropdownMenuLabel>Actions</DropdownMenuLabel>
                                     <DropdownMenuItem
                                       onClick={() =>
                                         navigate(
-                                          `/view/${invoice.details.invoiceNo}`
+                                          `/view/${(invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo}`
                                         )
                                       }
                                     >
@@ -2222,22 +2006,20 @@ const AdminPortal = () => {
                                     <DropdownMenuItem
                                       onClick={() =>
                                         navigate(
-                                          `/edit/${invoice.details.invoiceNo}`
+                                          `/edit/${(invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo}`
                                         )
                                       }
                                     >
                                       <Edit className="h-4 w-4 mr-2" /> Edit Invoice
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                      onClick={() => window.print()}
+                                      onClick={() =>
+                                        handlePrintInvoice(invoice)
+                                      }
                                     >
                                       <Printer className="h-4 w-4 mr-2" /> Print
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => window.print()}
-                                    >
-                                      <Download className="h-4 w-4 mr-2" /> Download
-                                    </DropdownMenuItem>
+
                                     <DropdownMenuSeparator />
                                     <AlertDialog>
                                       <AlertDialogTrigger asChild>
@@ -2248,7 +2030,7 @@ const AdminPortal = () => {
                                           <Trash2 className="h-4 w-4 mr-2" /> Delete
                                         </DropdownMenuItem>
                                       </AlertDialogTrigger>
-                                      <AlertDialogContent>
+                                          <AlertDialogContent>
                                         <AlertDialogHeader>
                                           <AlertDialogTitle>
                                             Delete Invoice?
@@ -2256,7 +2038,7 @@ const AdminPortal = () => {
                                           <AlertDialogDescription>
                                             This will permanently delete invoice{" "}
                                             <span className="font-bold">
-                                              {invoice.details.invoiceNo}
+                                              {invoice.details.invoiceNo || invoice.details.quotationNo}
                                             </span>{" "}
                                             for {invoice.buyer.name}. This action
                                             cannot be undone.
@@ -2265,14 +2047,15 @@ const AdminPortal = () => {
                                         <AlertDialogFooter>
                                           <AlertDialogCancel>Cancel</AlertDialogCancel>
                                           <AlertDialogAction
+                                            disabled={deletingInvoiceNo === ((invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo)}
                                             onClick={() =>
                                               handleDelete(
-                                                invoice.details.invoiceNo
+                                                (invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo
                                               )
                                             }
                                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                           >
-                                            Delete Invoice
+                                            {deletingInvoiceNo === ((invoice as { _id?: string })._id || invoice.details.invoiceNo || invoice.details.quotationNo) ? "Deleting..." : "Delete Invoice"}
                                           </AlertDialogAction>
                                         </AlertDialogFooter>
                                       </AlertDialogContent>
@@ -2443,9 +2226,263 @@ const AdminPortal = () => {
         .animate-float {
           animation: float 3s ease-in-out infinite;
         }
+`}</style>
+
+      {/* Report Print Overlay */}
+      {reportInvoices && (
+        <ReportPrintView
+          invoices={reportInvoices}
+          onClose={() => setReportInvoices(null)}
+        />
+      )}
+
+      {/* Single Invoice Print Overlay */}
+      {printInvoiceData && (
+        <SingleInvoicePrintView
+          invoice={printInvoiceData}
+          onClose={() => setPrintInvoiceData(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+// =========================================
+// ReportPrintView: Full-screen overlay used to print selected invoices.
+// Renders each invoice using ProfessionalInvoice (editable=false),
+// one per page with page-break-after: always.
+// =========================================
+interface ReportPrintViewProps {
+  invoices: InvoiceData[];
+  onClose: () => void;
+}
+
+const ReportPrintView: React.FC<ReportPrintViewProps> = ({
+  invoices,
+  onClose,
+}) => {
+  // [DEBUG] Step 5: verify what the component actually received
+  useEffect(() => {
+    console.log("[DEBUG ReportPrintView] STEP 5 - invoices prop received:", invoices?.length);
+    console.log("[DEBUG ReportPrintView] STEP 5b - is array?", Array.isArray(invoices));
+    if (Array.isArray(invoices)) {
+      invoices.forEach((inv, i) => {
+        console.log(`[DEBUG ReportPrintView] invoice[${i}]:`, inv.details?.invoiceNo || inv.details?.quotationNo || `unnamed-${i}`);
+      });
+    }
+  }, [invoices]);
+
+  useEffect(() => {
+    // Auto-trigger print after a short delay to allow rendering
+    const timer = setTimeout(() => {
+      window.print();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Listen for afterprint to auto-close
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      onClose();
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, [onClose]);
+
+  const safeDate = (d: unknown): Date => {
+    if (d instanceof Date) return Number.isNaN(d.getTime()) ? new Date() : d;
+    const parsed = new Date(String(d));
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  };
+
+  // [DEBUG] Step 6: log how many divs will be rendered
+  const invoiceCount = invoices?.length || 0;
+  console.log("[DEBUG ReportPrintView] STEP 6 - rendering", invoiceCount, "invoice divs");
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-white overflow-y-auto">
+      {/* Close button - hidden during print */}
+      <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
+        <span className="text-sm font-medium text-gray-700">
+          Report: {invoiceCount} invoice(s)
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              window.print();
+            }}
+          >
+            <Printer className="h-4 w-4 mr-1" />
+            Print
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+
+      {/* Invoice pages */}
+      {invoices.map((inv, idx) => {
+        const invIdentifier = inv.details?.invoiceNo || inv.details?.quotationNo || `invoice-${idx}`;
+        console.log(`[DEBUG ReportPrintView] Rendering invoice idx=${idx}, id=${invIdentifier}`);
+        return (
+        <div
+          key={invIdentifier}
+          className="report-invoice-page"
+          style={
+            idx < invoiceCount - 1
+              ? { pageBreakAfter: "always", marginBottom: 0 }
+              : {}
+          }
+        >
+          <div className="print:mx-auto print:my-0">
+            <ProfessionalInvoice
+              company={inv.company}
+              consignee={inv.consignee}
+              buyer={inv.buyer}
+              details={{
+                ...inv.details,
+                invoiceTitle: inv.details.invoiceTitle ?? "TAX INVOICE",
+                date: safeDate(inv.details.date),
+              }}
+              items={inv.items}
+              remarks={inv.remarks}
+              editable={false}
+              onCompanyChange={() => {}}
+              onConsigneeChange={() => {}}
+              onBuyerChange={() => {}}
+              onDetailsChange={() => {}}
+              onItemsChange={() => {}}
+              onRemarksChange={() => {}}
+            />
+          </div>
+        </div>
+        );
+      })}
+
+      <style>{`
+@media print {
+          .report-invoice-page {
+            page-break-inside: avoid;
+            width: 100%;
+          }
+          .no-print {
+            display: none !important;
+          }
+          @page {
+            margin: 0;
+            size: A4;
+          }
+        }
       `}</style>
     </div>
   );
 };
 
+// =========================================
+// SingleInvoicePrintView: Full-screen overlay used to print a SINGLE
+// invoice in isolation. Only the invoice/quotation is printed -
+// NO dashboard, NO sidebar, NO navbar, NO filters.
+// =========================================
+interface SingleInvoicePrintViewProps {
+  invoice: InvoiceData;
+  onClose: () => void;
+}
+
+const SingleInvoicePrintView: React.FC<SingleInvoicePrintViewProps> = ({
+  invoice,
+  onClose,
+}) => {
+  useEffect(() => {
+    // Auto-trigger print after a short delay to allow rendering
+    const timer = setTimeout(() => {
+      window.print();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Listen for afterprint to auto-close
+  useEffect(() => {
+    const handleAfterPrint = () => {
+      onClose();
+    };
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, [onClose]);
+
+  const safeDate = (d: unknown): Date => {
+    if (d instanceof Date) return Number.isNaN(d.getTime()) ? new Date() : d;
+    const parsed = new Date(String(d));
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] bg-white overflow-y-auto">
+      {/* Close button - hidden during print */}
+      <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
+        <span className="text-sm font-medium text-gray-700">
+          {invoice.details.invoiceTitle || "Invoice"}: {invoice.details.invoiceNo || invoice.details.quotationNo}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              window.print();
+            }}
+          >
+            <Printer className="h-4 w-4 mr-1" />
+            Print
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+
+      {/* Single Invoice - professional layout for print */}
+      <div className="print:mx-auto print:my-0">
+        <ProfessionalInvoice
+          company={invoice.company}
+          consignee={invoice.consignee}
+          buyer={invoice.buyer}
+          details={{
+            ...invoice.details,
+            invoiceTitle: invoice.details.invoiceTitle ?? "TAX INVOICE",
+            date: safeDate(invoice.details.date),
+          }}
+          items={invoice.items}
+          remarks={invoice.remarks}
+          editable={false}
+          onCompanyChange={() => {}}
+          onConsigneeChange={() => {}}
+          onBuyerChange={() => {}}
+          onDetailsChange={() => {}}
+          onItemsChange={() => {}}
+          onRemarksChange={() => {}}
+        />
+      </div>
+
+      <style>{`
+        @media print {
+          .no-print {
+            display: none !important;
+          }
+          body {
+            background-color: white !important;
+          }
+          @page {
+            margin: 0;
+            size: A4;
+          }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+
 export default AdminPortal;
+

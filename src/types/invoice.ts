@@ -139,6 +139,8 @@ export interface InvoiceDiscount {
 }
 
 export interface InvoiceData {
+  /** MongoDB _id — stable, unique identifier for all documents (including Quotations where invoiceNo="") */
+  _id?: string;
   company: Company;
   consignee: Party;
   buyer: Party;

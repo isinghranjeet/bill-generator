@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label";
 
 import {
   ArrowLeft,
-  Download,
   Edit,
   Eye,
   Printer,
@@ -27,6 +26,7 @@ import { putInvoice } from "@/lib/invoiceCache";
 
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
+import { convertToWords } from "@/utils/formatters";
 
 const createBlankInvoiceData = (): InvoiceData => ({
   discount: { type: "percentage", value: 0 },
@@ -128,113 +128,6 @@ function computeTotalsFromItems(items: InvoiceItem[]) {
   };
 }
 
-function clampNumber(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
-
-function computeDiscountAmount(subtotal: number, discount: InvoiceData["discount"] | undefined) {
-  if (!discount) return 0;
-  if (!Number.isFinite(discount.value)) return 0;
-
-  if (discount.type === "percentage") {
-    const pct = clampNumber(discount.value, 0, 100);
-    return parseFloat((subtotal * (pct / 100)).toFixed(2));
-  }
-
-  // fixed
-  return parseFloat(clampNumber(discount.value, 0, subtotal).toFixed(2));
-}
-
-function applyInvoiceDiscountToItems(items: InvoiceItem[], discount: InvoiceData["discount"] | undefined) {
-  const subtotal = items.reduce((acc, it) => acc + (it.taxableValue ?? 0), 0);
-  const discountAmountRaw = computeDiscountAmount(subtotal, discount);
-  const discountAmount = clampNumber(discountAmountRaw, 0, subtotal);
-
-  const discountedSubtotal = subtotal - discountAmount;
-  if (subtotal <= 0 || discountedSubtotal < 0) {
-    return {
-      discountedItems: items.map((it) => ({ ...it, taxableValue: 0, sgstAmount: 0, cgstAmount: 0, igstAmount: 0, total: 0 })),
-      discountAmount,
-      discountedSubtotal,
-    };
-  }
-
-  const scale = discountedSubtotal / subtotal;
-
-  const discountedItems = items.map((it) => {
-    const newTaxableValue = parseFloat(((it.taxableValue ?? 0) * scale).toFixed(2));
-    const gst = (it.sgstRate + it.cgstRate + it.igstRate) / 100;
-
-    const newSgstAmount = parseFloat((newTaxableValue * (it.sgstRate / 100)).toFixed(2));
-    const newCgstAmount = parseFloat((newTaxableValue * (it.cgstRate / 100)).toFixed(2));
-    const newIgstAmount = parseFloat((newTaxableValue * (it.igstRate / 100)).toFixed(2));
-
-    const newTotal = parseFloat((newTaxableValue + newSgstAmount + newCgstAmount + newIgstAmount).toFixed(2));
-
-    return {
-      ...it,
-      taxableValue: newTaxableValue,
-      sgstAmount: newSgstAmount,
-      cgstAmount: newCgstAmount,
-      igstAmount: newIgstAmount,
-      total: newTotal,
-      amount: newTaxableValue,
-    };
-  });
-
-  return {
-    discountedItems,
-    discountAmount,
-    discountedSubtotal: discountedSubtotal,
-  };
-}
-
-
-function convertToWords(num: number): string {
-  if (num === 0) return "Zero Rupees Only";
-
-  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const teens = [
-    "Ten",
-    "Eleven",
-    "Twelve",
-    "Thirteen",
-    "Fourteen",
-    "Fifteen",
-    "Sixteen",
-    "Seventeen",
-    "Eighteen",
-    "Nineteen",
-  ];
-
-  function convertBelow1000(n: number): string {
-    if (n === 0) return "";
-    if (n < 10) return ones[n];
-    if (n < 20) return teens[n - 10];
-    if (n < 100) {
-      return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + ones[n % 10] : "");
-    }
-    return (
-      ones[Math.floor(n / 100)] + " Hundred" +
-      (n % 100 !== 0 ? " and " + convertBelow1000(n % 100) : "")
-    );
-  }
-
-  const crore = Math.floor(num / 10000000);
-  const lakh = Math.floor((num % 10000000) / 100000);
-  const thousand = Math.floor((num % 100000) / 1000);
-  const remainder = Math.floor(num % 1000);
-
-  let result = "";
-  if (crore > 0) result += convertBelow1000(crore) + " Crore ";
-  if (lakh > 0) result += convertBelow1000(lakh) + " Lakh ";
-  if (thousand > 0) result += convertBelow1000(thousand) + " Thousand ";
-  if (remainder > 0) result += convertBelow1000(remainder);
-
-  return (result.trim() + " Rupees Only").replace(/\s+/g, " ");
-}
-
 export default function EditInvoice() {
   const navigate = useNavigate();
   const { invoiceNo } = useParams<{ invoiceNo: string }>();
@@ -246,7 +139,11 @@ export default function EditInvoice() {
 
   const invoiceNoDecoded = useMemo(() => {
     if (!invoiceNo) return "";
-    return decodeURIComponent(invoiceNo);
+    const decoded = decodeURIComponent(invoiceNo);
+    console.log("[DEBUG EditInvoice] invoiceNo from URL params:", JSON.stringify(invoiceNo));
+    console.log("[DEBUG EditInvoice] invoiceNoDecoded:", JSON.stringify(decoded));
+    console.log("[DEBUG EditInvoice] decoded charCodes:", Array.from(decoded).map(c => c.charCodeAt(0)));
+    return decoded;
   }, [invoiceNo]);
 
   useEffect(() => {
@@ -532,11 +429,6 @@ export default function EditInvoice() {
               Save
             </Button>
 
-            <Button variant="outline" onClick={handlePrint}>
-              <Download className="h-4 w-4 mr-2" />
-              PDF
-            </Button>
-
             <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Printer className="h-4 w-4 mr-2" />
               Print
@@ -565,7 +457,7 @@ export default function EditInvoice() {
         <div className="no-print text-center mt-6 text-sm text-gray-500">
           <p className="mb-1">💡 Make changes, then click <strong>Save</strong> to update this invoice.</p>
           <p>
-            Use <strong>Preview</strong> to see how it will look, then <strong>Print</strong> or <strong>PDF</strong>.
+            Use <strong>Preview</strong> to see how it will look, then <strong>Print</strong> to generate the final bill.
           </p>
         </div>
       </div>

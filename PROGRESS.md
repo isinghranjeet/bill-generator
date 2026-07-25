@@ -1,60 +1,73 @@
-# PROGRESS.md
+# Implementation Progress
 
-## Current status
-✅ **Complete Integration of Settings with Invoice/Quotation**
+## Phase 2 - Fix Each Issue
 
-All items from the integration plan have been implemented and validated.
+### ✅ Issue #1: REPORT SELECT ALL IS BROKEN
+**Status**: FIXED
+- `selectAll()` uses `filteredInvoices` (all matching items) instead of `paginatedInvoices` (current page)
+- Checkbox checked state syncs with `filteredInvoices.every()` 
+- `recordKey()` uses stable identifier (never `crypto.randomUUID()`)
 
-## What is done
+### ✅ Issue #2: GENERATE REPORT PDF ONLY EXPORTS 2 INVOICES  
+**Status**: FIXED
+- `pdfService.ts` `generateReportPdf()` - removed `continue` bug, proper per-invoice rendering
+- `AdminPortal.tsx` `generateReport()` - proper fallback logic for missing invoices
+- Backend `getInvoice` supports `_id`, `invoiceNo`, `quotationNo` lookup
 
-### Backend
-- `backend/server/src/controllers/settingsController.js`
-  - Added `bankDetails` to `settingsUpsertSchema` Zod validation
-  - Updated `upsertSettings` to save bankDetails
-  - `createOrUpsertInvoice` already snapshots company + bank + remarks from Settings for NEW invoices
-  - Uses fallback defaults when Settings fields are empty
-  - Existing invoices never get re-snapshotted
+### ✅ Issue #3: ACTION MENU
+**Status**: FIXED
+- View: Navigates using `_id` (stable for all document types)
+- Edit: Navigates using `_id` (stable for all document types)
+- Print: Uses `SingleInvoicePrintView` overlay (prints ONLY the invoice)
+- Delete: Proper async/await with loading state and toast feedback
 
-- `backend/server/src/models/Settings.js` - Has all required fields including bankDetails
-- `backend/server/src/routes/settingsRoutes.js` - Has `/consume-number` endpoint
-- `backend/server/src/schemas/settingsSchemas.js` - Schemas for company, invoice numbering, remarks
+### ✅ Issue #4: VIEW
+**Status**: FIXED
+- Route `/view/:invoiceNo` supports `_id` parameter
+- Backend `getInvoice` tries `_id` first, then `invoiceNo`, then `quotationNo`
+- ViewInvoice component uses `_id` from URL to call API
 
-### Frontend - Settings API & Hooks
-- `src/lib/settingsApi.ts` - Added `updateBankDetails`, fixed types, added `upsertSettings` function
-- `src/hooks/useSettings.ts` - Fixed type mapping to match flat API response, added bankDetails
+### ✅ Issue #5: EDIT
+**Status**: FIXED
+- Route `/edit/:invoiceNo` supports `_id` parameter
+- Backend same as View (already supports `_id` lookup)
+- EditInvoice component uses `_id` from URL
 
-### Frontend - AdminPortal
-- `src/pages/AdminPortal.tsx` - Added Settings button with `SettingsDrawer` integration
-- `src/components/settings/index.ts` - Proper exports
+### ✅ Issue #6: PRINT
+**Status**: FIXED
+- `SingleInvoicePrintView` component renders ONLY the invoice (no dashboard/sidebar/filters)
+- Auto-triggers `window.print()` on the overlay (not on the dashboard)
+- Proper A4 page format with correct margins
 
-### Frontend - SettingsDrawer
-- `src/components/settings/SettingsDrawer.tsx` 
-  - Added Bank Details section (Account Name, Bank Name, Account Number, IFSC Code, Branch)
-  - Fixed form initialization to map from flat API response
-  - Added `updateBankDetails` call in `onSave`
-  - Uses `upsertSettings` for unified save (covers all settings at once)
+### ✅ Issue #7: DELETE
+**Status**: FIXED
+- `handleDelete` is now properly async/await
+- Loading state prevents double-clicks
+- Success/error toasts
+- Refresh after deletion
 
-### Frontend - Invoice Components
-- `src/components/invoice/ProfessionalInvoice.tsx` - Replaced hardcoded bank details with dynamic `company` props
-- `src/components/invoice/BankDetails.tsx` - Already uses dynamic `company` props (no changes needed)
+### ✅ Issue #8: REPORT PDF QUALITY
+**Status**: FIXED
+- `generateReportPdf()` renders each invoice on a new page
+- Same ProfessionalInvoice rendering pipeline as single invoice PDF
+- Print-mimic CSS ensures proper A4 formatting
+- Page breaks guaranteed between invoices
 
-### Frontend - CreateInvoice
-- `src/pages/CreateInvoice.tsx` - Fixed `DEFAULT_COMPANY` fallback values for bank details
-  - accountNo: "44853461690" (was incorrect)
-  - ifscCode: "SBIN0010269" (was incorrect)
-  - branchAddress: "Madhuban Enclave" (was incorrect)
-  - accountHolderName: "Rent My Event" (was incorrect)
-- Added remarks as selectable chips/checkboxes with:
-  - Multiple selection
-  - Custom remarks input
-  - Selected remarks saved with invoice
-  - Remarks restored while editing
-  - Print/PDF shows only selected remarks
+### ✅ Issue #9: VERIFY ALL ROUTES
+**Status**: FIXED
+- All navigation uses `_id` as stable identifier
+- Backend routes support `_id`, `invoiceNo`, `quotationNo`
+- No broken navigate() calls
 
-## What is pending
-- None. All integration items complete.
+### ✅ Issue #10: BACKEND VALIDATION
+**Status**: FIXED
+- `getInvoice` supports `_id` + `invoiceNo` + `quotationNo` lookup
+- `deleteInvoice` supports `_id` + `invoiceNo` + `quotationNo` lookup
+- Response formats match frontend expectations
+- Removed excessive debug logging
 
-## Validation
-- `npm run lint` ✅ (pending final check after all changes)
-- `npm run build` ✅ (pending final check after all changes)
-
+### ✅ Issue #11: REMOVE TEMPORARY FIXES
+**Status**: FIXED
+- Removed console.log statements from production code
+- Cleaned up unused imports
+- Removed debug dump endpoint

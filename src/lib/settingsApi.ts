@@ -107,17 +107,12 @@ export async function consumeNextNumber(documentType: string) {
   const raw = documentType?.toLowerCase().trim() ?? "";
   const normalized = raw === "quotation" ? "quotation" : "invoice";
 
-  console.log("[consumeNextNumber] original documentType:", documentType);
-  console.log("[consumeNextNumber] normalized documentType:", normalized);
-
   if (normalized !== "invoice" && normalized !== "quotation") {
     const errMsg = `Invalid documentType: "${documentType}". Must be "invoice" or "quotation".`;
-    console.error("[consumeNextNumber]", errMsg);
     throw new Error(errMsg);
   }
 
   const payload = { documentType: normalized };
-  console.log("[consumeNextNumber] request payload:", JSON.stringify(payload));
 
   return apiFetch<{ ok: true; invoiceNo?: string; quotationNo?: string }>("/api/settings/consume-number", {
     method: "POST",

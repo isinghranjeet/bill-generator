@@ -38,9 +38,7 @@ export async function apiFetch<T = unknown>(
 
 
 
-  const url = `${API_BASE}${cleanedPath}`;
-
-  console.log("[apiFetch]", { method, url });
+const url = `${API_BASE}${cleanedPath}`;
 
   const res = await fetch(url, {
 

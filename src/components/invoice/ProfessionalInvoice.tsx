@@ -2,11 +2,27 @@
 
 import React, { useMemo, useCallback, useState } from 'react';
 import { Company, Party, InvoiceDetails, InvoiceItem } from "@/types/invoice";
-import { format } from "date-fns";
+import { format as dateFnsFormat } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Percent, IndianRupee, X } from "lucide-react";
+import { convertToWords } from "@/utils/formatters";
+
+// -----------------------------------------------------------------------
+// Safe date formatter — never throws RangeError("Invalid time value").
+// Falls back to "-" when the input is missing, null, undefined, or an
+// invalid Date. All other code paths must use this instead of raw format().
+// -----------------------------------------------------------------------
+function safeFormatDate(
+  date: Date | string | number | null | undefined,
+  dateFormat: string
+): string {
+  if (date == null) return "-";
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "-";
+  return dateFnsFormat(d, dateFormat);
+}
 
 interface ProfessionalInvoiceProps {
   company: Company;
@@ -772,13 +788,13 @@ export const ProfessionalInvoice = React.memo(({
                   {editable && onDetailsChange ? (
                     <Input
                       type="date"
-                      value={format(details.date, 'yyyy-MM-dd')}
+                      value={safeFormatDate(details.date, 'yyyy-MM-dd')}
                       onChange={(e) => onDetailsChange({ ...details, date: new Date(e.target.value) })}
                       className="h-6 text-xs w-full print:hidden"
                     />
                   ) : null}
                   <span className={editable ? "hidden print:block text-xs print:text-[7px]" : "text-xs print:text-[7px]"}>
-                    {format(details.date, 'dd/MM/yyyy')}
+                    {safeFormatDate(details.date, 'dd/MM/yyyy')}
                   </span>
                 </div>
 
@@ -1111,38 +1127,3 @@ export const ProfessionalInvoice = React.memo(({
 });
 
 ProfessionalInvoice.displayName = 'ProfessionalInvoice';
-
-// Number to words conversion
-function convertToWords(num: number): string {
-  if (num === 0) return "Zero Rupees Only";
-
-  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-
-  function convertBelow1000(n: number): string {
-    if (n === 0) return '';
-    if (n < 10) return ones[n];
-    if (n < 20) return teens[n - 10];
-    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
-    return (
-      ones[Math.floor(n / 100)] +
-      ' Hundred' +
-      (n % 100 !== 0 ? ' and ' + convertBelow1000(n % 100) : '')
-    );
-  }
-
-  const crore = Math.floor(num / 10000000);
-  const lakh = Math.floor((num % 10000000) / 100000);
-  const thousand = Math.floor((num % 100000) / 1000);
-  const remainder = Math.floor(num % 1000);
-
-  let result = '';
-
-  if (crore > 0) result += convertBelow1000(crore) + ' Crore ';
-  if (lakh > 0) result += convertBelow1000(lakh) + ' Lakh ';
-  if (thousand > 0) result += convertBelow1000(thousand) + ' Thousand ';
-  if (remainder > 0) result += convertBelow1000(remainder);
-
-  return (result.trim() + ' Rupees Only').replace(/\s+/g, ' ');
-}

@@ -998,18 +998,18 @@ const AdminPortal = () => {
   };
 
 const getInvoiceDate = (invoice: SavedInvoice): Date => {
-    // Primary source for invoice listing/history date: createdAt (server timestamp).
-    // Backward compatibility:
-    // - If createdAt is missing, fall back to legacy stored fields exactly once
-    //   (we do not generate/overwrite with "today" here).
+    // Primary source for invoice listing/history date: details.date (user-entered date).
+    // Backward compatibility for old invoices that don't have details.date:
+    // - Fall back to createdAt (server timestamp) if details.date is missing.
+    // - Fall back to savedAt (legacy backend) if createdAt is also missing.
     // Priority order:
-    //   1) invoice.createdAt
-    //   2) legacy: invoice.savedAt (older backend)
-    //   3) invoice.details.date (existing UI field — only for new invoices after backend passthrough fix)
+    //   1) invoice.details.date (user-entered invoice date — new invoices)
+    //   2) invoice.createdAt (server timestamp — old invoices)
+    //   3) invoice.savedAt (legacy backend — very old invoices)
     const createdAtValue: string | number | Date | undefined | null =
+      invoice.details?.date ??
       (invoice as { createdAt?: string | number | Date | null | undefined }).createdAt ??
       (invoice as { savedAt?: string | number | Date | null | undefined }).savedAt ??
-      invoice.details?.date ??
       null;
 
     return parseLocalDate(createdAtValue);
@@ -2486,3 +2486,4 @@ const SingleInvoicePrintView: React.FC<SingleInvoicePrintViewProps> = ({
 
 export default AdminPortal;
 
+ 

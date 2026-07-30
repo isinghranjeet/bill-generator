@@ -1,3 +1,20 @@
+logo
+more
+question-ai-logo
+managemanage
+managemanage
+useruser
+fullfull
+closeclose
+Chat AI
+Hello! Is there any question I can help you with?
+What are the main industries driving the U.S. economy?
+What can you do?
+Ask AI
+Caution
+Refresh this page to activate the extension on this page.
+Refresh
+Feedback
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useInvoiceOfflineCache } from "@/hooks/useInvoiceOfflineCache";
 import { useNavigate } from "react-router-dom";
@@ -2485,4 +2502,3 @@ const SingleInvoicePrintView: React.FC<SingleInvoicePrintViewProps> = ({
 
 
 export default AdminPortal;
-

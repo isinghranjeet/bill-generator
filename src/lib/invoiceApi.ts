@@ -29,9 +29,17 @@ export async function getInvoice(invoiceNo: string) {
 }
 
 export async function upsertInvoice(payload: InvoiceData) {
+  // Sanitize payload: The backend Zod schema rejects null for optional object fields.
+  // - Remove discount if null/undefined so the schema's .optional() accepts it as absent.
+  // - Remove any other fields that might be null but the schema expects absent.
+  const sanitized = { ...payload };
+  if (sanitized.discount === null || sanitized.discount === undefined) {
+    delete sanitized.discount;
+  }
+
   return apiFetch<{ ok: true; invoiceNo: string }>("/api/invoices/", {
     method: "POST",
-    body: payload,
+    body: sanitized,
   });
 }
 

@@ -1,68 +1,63 @@
-# Bug Fix Progress Tracker
+# Invoice Date Fix - Completed
 
-## ✅ Phase 1 - Complete
-- [x] Analyze complete frontend
-- [x] Analyze complete backend
-- [x] Trace every action end-to-end
-- [x] Identify root causes for all issues
+## Summary
 
-## ✅ Phase 2 - Implementation Complete
+The invoice date bug had **TWO root causes** — one in the backend and one in the frontend.
 
-### Issue #1: Report Select All Broken ✅
-**Root cause:** `selectAll()` used `paginatedInvoices` (current page only) instead of `filteredInvoices` (all matching items).
-**Fix applied:** Changed to use `filteredInvoices` for both selection and the "checked" state of the checkbox header.
+## ✅ Fix 1: Backend Zod Schema Stripping `details.date`
 
-### Issue #2 & #8: Report PDF Only Exports 2 Invoices ✅
-**Root cause A (HTML print):** CSS `position: absolute` on `.report-invoice-page` removed elements from normal flow, breaking `page-break-after: always`.
-**Root cause B (pdfService.ts):** `generateReportPdf()` had a `continue` statement that skipped all invoices after the first one.
-**Fixes applied:** 
-- Removed `position: absolute` from report print CSS, added `page-break-inside: avoid`
-- Rewrote `generateReportPdf()` to properly render each invoice individually
+**File:** `backend/server/src/schemas/invoiceSchemas.js`
 
-### Issue #3: Action Menu ✅
-**Fixes applied:** All actions (View, Edit, Print, Delete) now work correctly.
+**Root Cause:** The Zod schema for `details` only validated 3 fields (`invoiceTitle`, `invoiceNo`, `quotationNo`). Zod v3's `z.object()` by default **strips unknown fields**. So `details.date`, `details.dueDate`, `details.modeOfPayment`, `details.deliveryNote`, `details.supplierRef`, `details.otherReferences`, `details.buyerOrderNo`, `details.buyerOrderDate`, `details.despatchDocNo`, `details.deliveryNoteDate`, `details.despatchThrough`, `details.destination`, `details.termsOfDelivery`, `details.ewayBillNo` — ALL of these were **removed** during validation.
 
-### Issue #4: View ✅
-**Root cause:** Routes are correctly defined as `/view/:invoiceNo`. Backend controller properly looks up by invoiceNo, quotationNo, and _id.
-**Status:** Routes and navigation are correct.
+**The payload stored in MongoDB only had `{ invoiceTitle, invoiceNo, quotationNo }` — no `date`!**
 
-### Issue #5: Edit ✅
-**Routes are correct.** No code change needed.
+**Fix:** Added `.passthrough()` to the `details` Zod object so unknown fields are preserved:
+```js
+details: z.object({
+    invoiceTitle: z.string().optional().default("TAX INVOICE"),
+    invoiceNo: z.string().optional().default(""),
+    quotationNo: z.string().optional().default(""),
+}).passthrough(),  // ← PRESERVES details.date + all other fields
+```
 
-### Issue #6: Print ✅
-**Root cause:** `window.print()` on dashboard printed the entire page.
-**Fix applied:** Created `SingleInvoicePrintView` component that renders ONLY the invoice in an isolated print overlay.
+## ✅ Fix 2: Frontend `getInvoiceDate()` Using `createdAt`
 
-### Issue #7: Delete ✅
-**Root cause:** `handleDelete()` was not awaited - fire and forget.
-**Fix applied:** Made `handleDelete` async/await with proper loading state (`deletingInvoiceNo`), success/error toasts, and disabled button during deletion.
+**File:** `src/pages/AdminPortal.tsx`
 
-### Issue #9: Verify All Routes ✅
-All routes verified:
-- `/` → AdminPortal ✅
-- `/create` → CreateInvoice ✅
-- `/view/:invoiceNo` → ViewInvoice ✅
-- `/edit/:invoiceNo` → EditInvoice ✅
-- `/auth` → Auth ✅
-- `*` → NotFound ✅
+**Root Cause:** Even if `details.date` was stored correctly, the `getInvoiceDate()` function prioritized `createdAt` (server timestamp) over `details.date` (user-selected invoice date).
 
-### Issue #10: Backend Validation ✅
-All endpoints verified and working:
-- `GET /api/invoices` → listInvoices ✅
-- `GET /api/invoices/:invoiceNo` → getInvoice ✅
-- `POST /api/invoices/` → createOrUpsertInvoice ✅
-- `DELETE /api/invoices/:invoiceNo` → deleteInvoice ✅
-- `GET /api/settings` → getSettings ✅
-- `POST /api/settings` → upsertSettings ✅
-- `POST /api/settings/consume-number` → consumeDocumentNumber ✅
+**Fix:** Changed priority order from `createdAt → savedAt → details.date` to `details.date → invoiceDate → date → createdAt`:
+```tsx
+const getInvoiceDate = (invoice: SavedInvoice): Date => {
+  const invoiceDateValue =
+    invoice.details?.date ??
+    (invoice as { invoiceDate?: ... }).invoiceDate ??
+    (invoice as { date?: ... }).date ??
+    (invoice as { createdAt?: ... }).createdAt ??
+    null;
+  return parseLocalDate(invoiceDateValue);
+};
+```
 
-### Issue #11: Remove Temporary Fixes ✅
-**Cleaned up:**
-- Removed `console.log("[apiFetch]", ...)` from `apiClient.ts`
-- Removed `console.log("[CreateInvoice]", ...)` from `CreateInvoice.tsx`
-- Removed `console.log("[consumeNextNumber]", ...)` from `settingsApi.ts`
-- Removed all debug console.log statements from `AdminPortal.tsx`
-- Fixed `apiClient.ts` indentation
+## ✅ Fix 3: Frontend `upsertInvoice` Null Discount Sanitization
 
-## ✅ Phase 3 - Ready for Testing
-All fixes are applied. Ready for manual testing verification.
+**File:** `src/lib/invoiceApi.ts`
+
+**Root Cause:** When editing an invoice, the backend returns `discount: null` for invoices without discounts. The frontend payload includes `discount: null`, but the Zod schema's `.optional()` rejects `null` — it only allows the field to be absent.
+
+**Fix:** Added sanitization to remove `discount` if it's `null` or `undefined` before sending:
+```tsx
+const sanitized = { ...payload };
+if (sanitized.discount === null || sanitized.discount === undefined) {
+  delete sanitized.discount;
+}
+```
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `backend/server/src/schemas/invoiceSchemas.js` | Added `.passthrough()` to `details` Zod schema |
+| `src/pages/AdminPortal.tsx` | Updated `getInvoiceDate()` to use `details.date` first |
+| `src/lib/invoiceApi.ts` | Added `discount` null sanitization in `upsertInvoice()` |

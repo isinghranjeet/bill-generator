@@ -1,20 +1,3 @@
-logo
-more
-question-ai-logo
-managemanage
-managemanage
-useruser
-fullfull
-closeclose
-Chat AI
-Hello! Is there any question I can help you with?
-What are the main industries driving the U.S. economy?
-What can you do?
-Ask AI
-Caution
-Refresh this page to activate the extension on this page.
-Refresh
-Feedback
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useInvoiceOfflineCache } from "@/hooks/useInvoiceOfflineCache";
 import { useNavigate } from "react-router-dom";
@@ -1014,22 +997,22 @@ const AdminPortal = () => {
     );
   };
 
-  const getInvoiceDate = (invoice: SavedInvoice): Date => {
-    // Primary source for invoice listing/history date: details.date
-    // (the user-selected invoice date from the form).
-    // Fallback chain for backward compatibility with older records:
-    //   1) invoice.details.date (user-selected invoice date)
-    //   2) legacy: invoice.invoiceDate (older schema field name)
-    //   3) legacy: invoice.date (generic date field)
-    //   4) invoice.createdAt (server timestamp — last resort)
-    const invoiceDateValue: string | number | Date | undefined | null =
-      invoice.details?.date ??
-      (invoice as { invoiceDate?: string | number | Date | null | undefined }).invoiceDate ??
-      (invoice as { date?: string | number | Date | null | undefined }).date ??
+const getInvoiceDate = (invoice: SavedInvoice): Date => {
+    // Primary source for invoice listing/history date: createdAt (server timestamp).
+    // Backward compatibility:
+    // - If createdAt is missing, fall back to legacy stored fields exactly once
+    //   (we do not generate/overwrite with "today" here).
+    // Priority order:
+    //   1) invoice.createdAt
+    //   2) legacy: invoice.savedAt (older backend)
+    //   3) invoice.details.date (existing UI field — only for new invoices after backend passthrough fix)
+    const createdAtValue: string | number | Date | undefined | null =
       (invoice as { createdAt?: string | number | Date | null | undefined }).createdAt ??
+      (invoice as { savedAt?: string | number | Date | null | undefined }).savedAt ??
+      invoice.details?.date ??
       null;
 
-    return parseLocalDate(invoiceDateValue);
+    return parseLocalDate(createdAtValue);
   };
 
   // Get active filter display
@@ -2502,3 +2485,4 @@ const SingleInvoicePrintView: React.FC<SingleInvoicePrintViewProps> = ({
 
 
 export default AdminPortal;
+

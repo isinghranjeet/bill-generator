@@ -526,7 +526,7 @@ export const ProfessionalInvoice = React.memo(({
   );
 
   return (
-    <div className="bg-white p-6 print:p-0 w-[210mm] print:w-full min-h-[297mm] print:min-h-auto mx-auto font-sans print:border-0 print:shadow-none print:overflow-visible">
+    <div className="invoice-paper mx-auto min-h-[297mm] w-full max-w-[210mm] bg-white p-3 font-sans text-slate-900 shadow-sm sm:p-6 print:min-h-auto print:w-full print:max-w-none print:p-0 print:shadow-none print:overflow-visible">
       {/* ===== ACTION BAR (Discount button lives here — pair this with your
           existing "Print PDF" button in the parent toolbar; this component
           only owns the button + popup, not page-level PDF/print actions) ===== */}
@@ -667,31 +667,31 @@ export const ProfessionalInvoice = React.memo(({
 
       {/* ===== HEADER SECTION (must stay on first page) ===== */}
       <div className="print:header-block print:break-inside-avoid">
-        <div className="border-b-2 border-black pb-4 mb-4 print:pb-2">
-          <div className="flex justify-between items-start print:flex-nowrap">
-            <div className="flex-1 print:flex-1">
-              <div className="flex items-start gap-3 mb-2 print:gap-2">
+        <div className="mb-4 border-b border-slate-300 pb-4 print:pb-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between print:flex-row print:flex-nowrap">
+            <div className="min-w-0 flex-1 print:flex-1">
+              <div className="mb-2 flex min-w-0 items-start gap-3 print:gap-2">
                 {company.logo && (
                   <div className="print:max-h-[50px] print:flex-shrink-0">
                     <img
                       src={company.logo}
                       alt={`${company.name} Logo`}
-                      className="h-16 w-auto object-contain print:max-h-[50px] print:h-auto"
+                      className="h-12 w-auto object-contain print:max-h-[42px] print:h-auto"
                     />
                   </div>
                 )}
 
                 <div className="flex-1 print:break-inside-avoid">
                   <div className="print:break-inside-avoid">
-                    <h1 className="text-3xl font-black text-blue-900 tracking-wider mb-1 print:text-xl print:mb-0">
+                    <h1 className="mb-0.5 text-xl font-bold text-slate-900 print:text-lg">
                       {company.name || "RENT MY EVENT"}
                     </h1>
-                    <div className="text-sm font-medium text-blue-600 uppercase tracking-widest mb-2 print:text-[10px] print:mb-1">
+                    <div className="mb-2 text-xs font-medium text-slate-500 print:text-[8px] print:mb-1">
                       Style Your Moment
                     </div>
                   </div>
 
-                  <div className="text-xs text-gray-600 space-y-0.5 print:text-[7px] print:space-y-0">
+                  <div className="space-y-0.5 text-xs text-slate-600 print:text-[7px] print:space-y-0">
                     <p className="font-medium print:font-normal">{company.address}</p>
                     <div className="grid grid-cols-2 gap-1 print:grid-cols-2">
                       <p>
@@ -714,24 +714,31 @@ export const ProfessionalInvoice = React.memo(({
               </div>
             </div>
 
-            <div className="border-l pl-3 ml-3 min-w-[200px] print:min-w-[140px] print:pl-2 print:ml-2">
+            <div className="w-full min-w-0 border-t border-slate-200 pt-3 sm:w-[40%] sm:min-w-[230px] sm:border-l sm:border-t-0 sm:pb-1 sm:pl-4 sm:pt-0 print:w-[40%] print:min-w-[140px] print:border-l print:border-t-0 print:pb-0 print:pl-3 print:pt-0">
               <div className="mb-3 print:mb-1">
                 {editable && onDetailsChange ? (
-                  <Input
-                    value={details.invoiceTitle || ""}
-                    onChange={(e) =>
-                      onDetailsChange({
-                        ...details,
-                        invoiceTitle: e.target.value,
-                      })
-                    }
-                    placeholder="TAX INVOICE"
-                    className="h-8 text-center text-xl font-bold text-blue-800 print:hidden"
-                  />
+                  <>
+                    <Input
+                      value={details.invoiceTitle || ""}
+                      onChange={(e) =>
+                        onDetailsChange({
+                          ...details,
+                          invoiceTitle: e.target.value,
+                        })
+                      }
+                      placeholder="TAX INVOICE"
+                      className="h-8 border-0 border-b border-slate-300 rounded-none bg-transparent text-center text-lg font-semibold text-slate-800 shadow-none focus-visible:ring-0 print:hidden"
+                    />
+                    <h2 className="hidden text-center text-base font-semibold text-slate-800 print:block print:leading-tight">
+                      {details.invoiceTitle?.trim() || "TAX INVOICE"}
+                    </h2>
+                  </>
                 ) : null}
-                <h2 className="text-xl font-bold text-center text-blue-800 print:text-base print:leading-tight">
-                  {details.invoiceTitle?.trim() || "TAX INVOICE"}
-                </h2>
+                {!editable && (
+                  <h2 className="text-center text-base font-semibold text-slate-800 print:text-base print:leading-tight">
+                    {details.invoiceTitle?.trim() || "TAX INVOICE"}
+                  </h2>
+                )}
               </div>
 
               <div className="space-y-1 print:space-y-0.5">
@@ -795,6 +802,27 @@ export const ProfessionalInvoice = React.memo(({
                   ) : null}
                   <span className={editable ? "hidden print:block text-xs print:text-[7px]" : "text-xs print:text-[7px]"}>
                     {safeFormatDate(details.date, 'dd/MM/yyyy')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-1 items-center print:grid-cols-2 print:gap-0.5">
+                  <span className="font-semibold text-xs print:text-[7px]">Due Date:</span>
+                  {editable && onDetailsChange ? (
+                    <Input
+                      type="date"
+                      value={details.dueDate ? safeFormatDate(details.dueDate, "yyyy-MM-dd") : ""}
+                      onChange={(event) => {
+                        const [year, month, day] = event.target.value.split("-").map(Number);
+                        onDetailsChange({
+                          ...details,
+                          dueDate: event.target.value ? new Date(year, month - 1, day) : undefined,
+                        });
+                      }}
+                      className="h-6 text-xs w-full print:hidden"
+                    />
+                  ) : null}
+                  <span className={editable ? "hidden print:block text-xs print:text-[7px]" : "text-xs print:text-[7px]"}>
+                    {details.dueDate ? safeFormatDate(details.dueDate, "dd/MM/yyyy") : "-"}
                   </span>
                 </div>
 

@@ -294,19 +294,31 @@ const onSave = async () => {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg p-0">
+      <SheetContent side="right" className="w-full sm:max-w-2xl p-0">
         <div className="flex flex-col h-full">
           <SheetHeader className="px-4 py-4 border-b border-border">
-            <SheetTitle className="flex items-center gap-2">
+            <SheetTitle className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
               Settings
+              </span>
+              <span className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] font-medium text-primary">
+                Account-specific
+              </span>
             </SheetTitle>
           </SheetHeader>
+
+          <nav className="flex gap-1 overflow-x-auto border-b border-border px-3 py-2" aria-label="Settings sections">
+            <a href="#settings-company" className="shrink-0 rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Company</a>
+            <a href="#settings-bank" className="shrink-0 rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Bank</a>
+            <a href="#settings-numbering" className="shrink-0 rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Numbering</a>
+            <a href="#settings-remarks" className="shrink-0 rounded-md px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">Remarks</a>
+          </nav>
 
           <div className="flex-1 overflow-auto px-4 py-4 space-y-6">
             {error ? <div className="text-sm text-destructive">{error}</div> : null}
 
-            <section className="space-y-3">
+            <section id="settings-company" className="scroll-mt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <h3 className="font-semibold">Company Profile</h3>
@@ -366,13 +378,34 @@ const onSave = async () => {
                     placeholder="Email"
                   />
                 </div>
+                <Input
+                  type="url"
+                  value={form.companyProfile.website}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      companyProfile: { ...prev.companyProfile, website: e.target.value },
+                    }))
+                  }
+                  placeholder="Website"
+                />
+                <Input
+                  value={form.companyProfile.logo}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      companyProfile: { ...prev.companyProfile, logo: e.target.value },
+                    }))
+                  }
+                  placeholder="Logo URL"
+                />
               </div>
             </section>
 
             <Separator />
 
             {/* Bank Details Section */}
-            <section className="space-y-3">
+            <section id="settings-bank" className="scroll-mt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Banknote className="h-4 w-4 text-muted-foreground" />
                 <h3 className="font-semibold">Bank Details</h3>
@@ -436,7 +469,7 @@ const onSave = async () => {
 
             <Separator />
 
-            <section className="space-y-3">
+            <section id="settings-numbering" className="scroll-mt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <h3 className="font-semibold">Invoice & Quotation Number Settings</h3>
@@ -533,7 +566,7 @@ const onSave = async () => {
 
             <Separator />
 
-            <section className="space-y-3">
+            <section id="settings-remarks" className="scroll-mt-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Tag className="h-4 w-4 text-muted-foreground" />
                 <h3 className="font-semibold">Remarks</h3>

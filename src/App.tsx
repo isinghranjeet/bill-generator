@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AdminPortal from "./pages/AdminPortal";
 
@@ -19,13 +20,14 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <PwaUpdateBanner />
-      {/* Offline indicator */}
-      <OfflineBanner />
-      <BrowserRouter>
+    <NextThemesProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <PwaUpdateBanner />
+        {/* Offline indicator */}
+        <OfflineBanner />
+        <BrowserRouter>
 
         <div className="no-print">
           <header className="fixed top-4 right-4 z-[100] pointer-events-none">
@@ -43,8 +45,9 @@ const App = () => (
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </NextThemesProvider>
   </QueryClientProvider>
 );
 

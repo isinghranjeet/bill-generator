@@ -152,6 +152,8 @@ export interface InvoiceData {
   totalAmount: number;
   totalTax: number;
   totalAmountInWords: string;
+  paymentStatus?: "unpaid" | "partial" | "paid";
+  amountPaid?: number;
 }
 
 

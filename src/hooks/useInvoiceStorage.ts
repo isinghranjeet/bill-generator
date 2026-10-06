@@ -13,8 +13,22 @@ export const useInvoiceStorage = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getInvoices({ page: 1, limit: 100 });
-      setInvoices(data.items as SavedInvoice[]);
+      const firstPage = await getInvoices({ page: 1, limit: 100 });
+      const allInvoices = [...firstPage.items];
+      const pageCount = Math.max(1, firstPage.totalPages || 1);
+
+      for (let firstPageNumber = 2; firstPageNumber <= pageCount; firstPageNumber += 5) {
+        const pageNumbers = Array.from(
+          { length: Math.min(5, pageCount - firstPageNumber + 1) },
+          (_, index) => firstPageNumber + index
+        );
+        const pages = await Promise.all(
+          pageNumbers.map((page) => getInvoices({ page, limit: 100 }))
+        );
+        allInvoices.push(...pages.flatMap((page) => page.items));
+      }
+
+      setInvoices(allInvoices as SavedInvoice[]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load invoices");
     } finally {

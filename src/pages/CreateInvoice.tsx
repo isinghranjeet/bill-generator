@@ -7,6 +7,7 @@ import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
 import { putInvoice } from "@/lib/invoiceCache";
 
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
+import { PdfPaymentStatusDialog, type PdfPaymentStatus } from "@/components/invoice/PdfPaymentStatusDialog";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Save, RotateCcw, Eye, Edit, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -92,11 +93,14 @@ const defaultInvoiceData: InvoiceData = {
   totalTax: 180,
   discount: { type: "percentage", value: 0 },
   totalAmountInWords: "One Thousand One Hundred and Eighty Rupees Only",
+  paymentStatus: "unpaid",
+  amountPaid: 0,
 };
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const duplicateSource = searchParams.get("duplicate");
 
   const documentTypeParam = useMemo(
     () => (searchParams.get("type") || "invoice").toLowerCase(),
@@ -105,10 +109,12 @@ const CreateInvoice = () => {
   const documentType: "invoice" | "quotation" =
     documentTypeParam === "quotation" ? "quotation" : "invoice";
 
-  const { saveInvoice } = useInvoiceStorage();
+  const { saveInvoice, getInvoiceRemote } = useInvoiceStorage();
 
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(defaultInvoiceData);
   const [editable, setEditable] = useState(true);
+  const [pdfStatusOpen, setPdfStatusOpen] = useState(false);
+  const [duplicateLoaded, setDuplicateLoaded] = useState(!duplicateSource);
 
   // Prevent double-consume on strict-mode remounts
   const consumedRef = useRef(false);
@@ -137,7 +143,10 @@ const CreateInvoice = () => {
           mobile: s.phone?.trim() ? s.phone : DEFAULT_COMPANY.mobile,
           email: s.email?.trim() ? s.email : DEFAULT_COMPANY.email,
 
-          logo: logoFromSettings?.trim ? logoFromSettings : DEFAULT_COMPANY.logo,
+          logo:
+            typeof logoFromSettings === "string" && logoFromSettings.trim()
+              ? logoFromSettings.trim()
+              : DEFAULT_COMPANY.logo,
 
           // Bank defaults: keep hardcoded defaults if settings have none
           bankName:
@@ -167,7 +176,7 @@ const CreateInvoice = () => {
           // NEW docs only: only patch defaults if invoice has no allocated number yet
           const hasAllocatedNumber =
             prev.details.invoiceNo?.trim() || prev.details.quotationNo?.trim();
-          if (hasAllocatedNumber) return prev;
+          if (hasAllocatedNumber || duplicateSource) return prev;
 
           return {
             ...prev,
@@ -186,7 +195,50 @@ const CreateInvoice = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [duplicateSource]);
+
+  useEffect(() => {
+    if (!duplicateSource) return;
+    let cancelled = false;
+
+    const loadDuplicate = async () => {
+      try {
+        const source = await getInvoiceRemote(duplicateSource);
+        if (cancelled) return;
+
+        setInvoiceData((prev) => ({
+          ...source,
+          details: {
+            ...source.details,
+            invoiceTitle: documentType === "quotation" ? "QUOTATION" : "TAX INVOICE",
+            invoiceNo: documentType === "invoice" ? prev.details.invoiceNo : "",
+            quotationNo: documentType === "quotation" ? prev.details.quotationNo : "",
+            date: new Date(),
+            dueDate: undefined,
+          },
+          items: source.items.map((item, index) => ({
+            ...item,
+            id: crypto.randomUUID(),
+            srNo: index + 1,
+          })),
+          paymentStatus: "unpaid",
+          amountPaid: 0,
+        }));
+        toast.success("Copy loaded as a new document.");
+      } catch (error) {
+        if (!cancelled) {
+          toast.error(error instanceof Error ? error.message : "Could not load the document to duplicate.");
+        }
+      } finally {
+        if (!cancelled) setDuplicateLoaded(true);
+      }
+    };
+
+    void loadDuplicate();
+    return () => {
+      cancelled = true;
+    };
+  }, [duplicateSource, documentType, getInvoiceRemote]);
 
   // ---------------------------
   // Document title + numbering consume on first NEW allocation
@@ -259,16 +311,22 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
 
     };
 
+    if (!duplicateLoaded) return;
+
     // Only on NEW docs (no allocated number yet)
     if (invoiceData.details.invoiceNo?.trim() || invoiceData.details.quotationNo?.trim()) {
-      return;
+      return false;
     }
 
     ensureNumber();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [documentType]);
+  }, [documentType, duplicateLoaded]);
 
   const handlePrint = () => {
+    setPdfStatusOpen(true);
+  };
+
+  const printInvoice = () => {
     toast.dismiss();
     document.body.classList.add("printing");
     window.print();
@@ -302,31 +360,31 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
     toast.success("Invoice reset successfully!");
   };
 
-  const handleSave = async () => {
+  const handleSave = async (pdfPaymentStatus?: PdfPaymentStatus): Promise<boolean> => {
     if (!invoiceData.buyer.name.trim()) {
       toast.error("Please enter buyer name");
-      return;
+      return false;
     }
 
     if (invoiceData.items.length === 0) {
       toast.error("Please add at least one item");
-      return;
+      return false;
     }
 
     if (!invoiceData.items.some((item) => item.description.trim())) {
       toast.error("Please add description for at least one item");
-      return;
+      return false;
     }
 
     if (!invoiceData.items.some((item) => item.rate > 0)) {
       toast.error("Please enter rate for at least one item");
-      return;
+      return false;
     }
 
     // Do not mutate allocated numbers
     if (documentType === "invoice" && !invoiceData.details.invoiceNo?.trim()) {
       toast.error("Invoice number is missing.");
-      return;
+      return false;
     }
     if (documentType === "quotation" && !invoiceData.details.quotationNo?.trim()) {
       toast.error("Quotation number is missing.");
@@ -349,17 +407,29 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
       totalAmount,
       totalTax,
       totalAmountInWords: convertToWords(totalAmount),
+      paymentStatus: pdfPaymentStatus ?? invoiceData.paymentStatus ?? "unpaid",
+      amountPaid: pdfPaymentStatus
+        ? pdfPaymentStatus === "paid" ? totalAmount : 0
+        : invoiceData.amountPaid ?? 0,
     };
 
     try {
       await saveInvoice(invoiceToSave);
       putInvoice(invoiceToSave);
+      setInvoiceData(invoiceToSave);
       toast.success("Invoice saved successfully!");
       setEditable(false);
+      return true;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save invoice");
+      return false;
     }
+  };
 
+  const handleConfirmPdfStatus = async (status: PdfPaymentStatus) => {
+    const saved = await handleSave(status);
+    if (!saved) throw new Error("Complete the required invoice details before saving the PDF.");
+    window.setTimeout(printInvoice, 100);
   };
 
   const handleSaveAndNew = () => {
@@ -410,7 +480,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 print:py-0 print:px-0 print:bg-white">
+    <div className="min-h-screen bg-background text-foreground py-8 px-4 print:py-0 print:px-0 print:bg-white">
       <style>
         {`
           @media print {
@@ -436,7 +506,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
 
       <div className="max-w-[210mm] mx-auto print:max-w-none print:my-0">
         {/* Toolbar */}
-        <div className="mb-6 no-print flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-lg shadow-sm border">
+        <div className="mb-6 no-print flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
           <Button variant="ghost" onClick={() => navigate("/")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Admin
@@ -462,7 +532,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
                   variant="ghost"
                   size="sm"
                   onClick={removeLogo}
-                  className="ml-2 text-red-500 hover:text-red-700"
+                  className="ml-2 text-destructive hover:text-destructive/80"
                 >
                   Remove Logo
                 </Button>
@@ -488,7 +558,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
                 </>
               )}
             </Button>
-            <Button variant="outline" onClick={handleSave}>
+            <Button variant="outline" onClick={() => void handleSave()}>
               <Save className="h-4 w-4 mr-2" />
               Save
             </Button>
@@ -496,7 +566,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
               <Save className="h-4 w-4 mr-2" />
               Save & New
             </Button>
-            <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={handlePrint}>
               <Printer className="h-4 w-4 mr-2" />
               Print
             </Button>
@@ -523,7 +593,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
         </div>
 
         {/* Help Tips */}
-        <div className="no-print text-center mt-6 text-sm text-gray-500">
+        <div className="no-print text-center mt-6 text-sm text-muted-foreground">
           <p className="mb-1">
             💡 Fill in all details, then click <strong>Save</strong> to store the invoice.
           </p>
@@ -531,10 +601,16 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
           <p>
             Use <strong>Preview</strong> to see how the invoice will look, then <strong>Print</strong> to generate the final bill.
           </p>
-          <p className="text-xs text-gray-400 mt-2">
+          <p className="text-xs text-muted-foreground/75 mt-2">
             Note: For best print results, use Chrome or Edge browser. Ensure "Background graphics" is enabled in print settings.
           </p>
         </div>
+        <PdfPaymentStatusDialog
+          open={pdfStatusOpen}
+          invoice={invoiceData}
+          onOpenChange={setPdfStatusOpen}
+          onConfirm={handleConfirmPdfStatus}
+        />
       </div>
     </div>
   );

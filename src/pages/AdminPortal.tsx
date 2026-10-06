@@ -1,10 +1,14 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useInvoiceOfflineCache } from "@/hooks/useInvoiceOfflineCache";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "next-themes";
 import { useInvoiceStorage, SavedInvoice } from "@/hooks/useInvoiceStorage";
 import { getInvoice as getInvoiceApi } from "@/lib/invoiceApi";
 import type { InvoiceData } from "@/types/invoice";
 import { formatCurrency, formatDate } from "@/utils/formatters";
+import { isQuotationDocument } from "@/utils/invoiceTypes";
+import { getInvoicePaymentState } from "@/utils/invoicePayments";
+import { deduplicateReportInvoices } from "@/utils/reportInvoices";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +40,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Plus,
   Search,
@@ -64,6 +70,10 @@ import {
   ChevronRight,
   Filter,
   Settings,
+  Keyboard,
+  Copy,
+  Download,
+  Palette,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -110,7 +120,6 @@ import {
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
 import { SettingsDrawer } from "@/components/settings";
 import { cn } from "@/lib/utils";
-import { generateReportPdf } from "@/lib/pdfService";
 
 
 
@@ -119,6 +128,8 @@ type SortField = "date" | "amount" | "invoiceNo" | "customer";
 type SortDirection = "asc" | "desc";
 type FilterPeriod = "all" | "today" | "yesterday" | "last7" | "last30" | "thisMonth" | "lastMonth" | "thisYear" | "custom" | "customRange";
 type FilterType = "all" | "quotation" | "with_gst" | "without_gst";
+type PaymentFilter = "all" | "unpaid" | "partial" | "paid" | "overdue";
+type AccentTheme = "forest" | "ocean" | "coral";
 
 // =========================================
 // UTILITY: Robust local date parsing
@@ -165,6 +176,9 @@ interface DashboardStatsProps {
     thisMonthCount: number;
     thisMonthRevenue: number;
     averageInvoice: number;
+    amountCollected: number;
+    outstandingAmount: number;
+    overdueCount: number;
   };
 }
 
@@ -185,6 +199,20 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
       color: "green",
     },
     {
+      label: "Collected",
+      value: formatCurrency(stats.amountCollected),
+      sub: "Payments received",
+      icon: CheckCircle,
+      color: "blue",
+    },
+    {
+      label: "Outstanding",
+      value: formatCurrency(stats.outstandingAmount),
+      sub: `${stats.overdueCount} overdue`,
+      icon: Clock,
+      color: "orange",
+    },
+    {
       label: "Customers",
       value: stats.uniqueCustomers,
       sub: `${((stats.uniqueCustomers / stats.total) * 100 || 0).toFixed(1)}% repeat`,
@@ -201,7 +229,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3 mb-8">
       {statCards.map((card, index) => {
         const Icon = card.icon;
         const colorClasses = {
@@ -209,6 +237,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
           green: "bg-green-500/10 text-green-600",
           blue: "bg-blue-500/10 text-blue-600",
           purple: "bg-purple-500/10 text-purple-600",
+          orange: "bg-orange-500/10 text-orange-600",
         };
 
         return (
@@ -218,15 +247,17 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ stats }) => {
             style={{ animationDelay: `${index * 100}ms` }}
           >
             <Card className="bg-gradient-to-br from-card to-card/95 border-border/50 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1">
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">{card.label}</p>
-                    <p className="text-2xl font-bold tracking-tight">{card.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex h-full flex-col gap-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="min-w-0 text-sm text-muted-foreground">{card.label}</p>
+                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", colorClasses[card.color as keyof typeof colorClasses])}>
+                      <Icon className="h-5 w-5" />
+                    </div>
                   </div>
-                  <div className={cn("w-12 h-12 rounded-full flex items-center justify-center", colorClasses[card.color as keyof typeof colorClasses])}>
-                    <Icon className="h-6 w-6" />
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold leading-tight tracking-tight tabular-nums sm:text-xl [overflow-wrap:anywhere]">{card.value}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{card.sub}</p>
                   </div>
                 </div>
               </CardContent>
@@ -543,6 +574,7 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
       result = result.filter(
         (inv) =>
           inv.details.invoiceNo.toLowerCase().includes(lower) ||
+          inv.details.quotationNo.toLowerCase().includes(lower) ||
           inv.buyer.name.toLowerCase().includes(lower) ||
           inv.buyer.gstin?.toLowerCase().includes(lower)
       );
@@ -557,8 +589,10 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
 
     if (invoiceNoSearch) {
       const lower = invoiceNoSearch.toLowerCase();
-      result = result.filter((inv) =>
-        inv.details.invoiceNo.toLowerCase().includes(lower)
+      result = result.filter(
+        (inv) =>
+          inv.details.invoiceNo.toLowerCase().includes(lower) ||
+          inv.details.quotationNo.toLowerCase().includes(lower)
       );
     }
 
@@ -584,11 +618,12 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
  *      as last resort — NEVER use crypto.randomUUID() since that changes
  *      on every call and breaks Set.has() / checkbox sync.
  */
-  const recordKey = (inv: { details: { invoiceNo?: string; quotationNo?: string; date?: unknown }; buyer?: { name?: string }; totalAmount?: number }): string => {
+  const recordKey = (inv: { _id?: string; details: { invoiceNo?: string; quotationNo?: string; date?: unknown }; buyer?: { name?: string }; totalAmount?: number }): string => {
     const invNo = inv.details?.invoiceNo;
     if (invNo && invNo.trim() !== "") return invNo;
     const quoNo = inv.details?.quotationNo;
     if (quoNo && quoNo.trim() !== "") return quoNo;
+    if (inv._id?.trim()) return inv._id;
     // Stable composite fallback: never use crypto.randomUUID() here!
     const buyerName = (inv.buyer?.name || "").trim();
     const dateStr = String(inv.details?.date ?? "");
@@ -600,12 +635,18 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
   // This ensures Select All selects every invoice matching current filters regardless of pagination.
   const selectAll = () => {
     const allFilteredKeys = filteredInvoices.map((inv) => recordKey(inv));
-    const allSelected = allFilteredKeys.every((key) => selectedIds.has(key));
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(allFilteredKeys));
-    }
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      const allSelected =
+        allFilteredKeys.length > 0 && allFilteredKeys.every((key) => current.has(key));
+
+      allFilteredKeys.forEach((key) => {
+        if (allSelected) next.delete(key);
+        else next.add(key);
+      });
+
+      return next;
+    });
   };
 
   // Toggle individual
@@ -677,7 +718,7 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-6xl max-h-[90dvh] flex flex-col p-0">
         <DialogHeader className="p-6 pb-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -691,9 +732,19 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
                 </DialogDescription>
               </div>
             </div>
-            <Badge variant="outline" className="text-lg px-4 py-2">
-              {selectedIds.size} of {filteredInvoices.length} selected
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">{selectedIds.size} selected</Badge>
+              <Badge variant="secondary">{filteredInvoices.length} matches</Badge>
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
@@ -768,10 +819,7 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
                         (item.cgstRate && item.cgstRate > 0) ||
                         (item.igstRate && item.igstRate > 0)
                     );
-                    const isQuote = invoice.details.invoiceTitle
-                      ?.toLowerCase()
-                      .includes("quotation") ||
-                      !!invoice.details.quotationNo;
+                    const isQuote = isQuotation(invoice);
                     const docType = isQuote
                       ? "Quotation"
                       : isGST
@@ -799,7 +847,7 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
                           />
                         </TableCell>
                         <TableCell className="font-mono font-medium">
-                          {invoice.details.invoiceNo}
+                          {invoice.details.invoiceNo || invoice.details.quotationNo || "Draft"}
                         </TableCell>
                         <TableCell>{formatDate(invDate)}</TableCell>
                         <TableCell>
@@ -931,8 +979,9 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
             onClick={handleGenerate}
             disabled={selectedIds.size === 0 || isGenerating}
             className="min-w-[150px]"
+            aria-busy={isGenerating}
           >
-            {isGenerating ? "Generating..." : `Generate (${selectedIds.size})`}
+            {isGenerating ? "Preparing PDF..." : `Generate PDF (${selectedIds.size})`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -945,7 +994,8 @@ const ReportDialog: React.FC<ReportDialogProps> = ({
 // =========================================
 const AdminPortal = () => {
   const navigate = useNavigate();
-  const { invoices, deleteInvoice, apiState } = useInvoiceStorage();
+  const { theme, setTheme } = useTheme();
+  const { invoices, deleteInvoice, saveInvoice, apiState } = useInvoiceStorage();
 
   useInvoiceOfflineCache({
     setInvoices: undefined,
@@ -953,11 +1003,28 @@ const AdminPortal = () => {
 
   // State
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>(() => {
+    const storedAccent = localStorage.getItem("invoice-dashboard-accent");
+    return storedAccent === "ocean" || storedAccent === "coral" ? storedAccent : "forest";
+  });
+  const [compactView, setCompactView] = useState(
+    () => localStorage.getItem("invoice-dashboard-compact") === "true"
+  );
+  const [glassSurfaces, setGlassSurfaces] = useState(
+    () => localStorage.getItem("invoice-dashboard-glass") === "true"
+  );
+  const [motionEnabled, setMotionEnabled] = useState(
+    () => localStorage.getItem("invoice-dashboard-motion") !== "false"
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>("all");
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("all");
   const [selectedCustomer, setSelectedCustomer] = useState<string>("all");
   const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
   const [customRange, setCustomRange] = useState<{
@@ -973,6 +1040,53 @@ const AdminPortal = () => {
 
 // State for report print overlay
   const [reportInvoices, setReportInvoices] = useState<InvoiceData[] | null>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.accent = accentTheme;
+    localStorage.setItem("invoice-dashboard-accent", accentTheme);
+    localStorage.setItem("invoice-dashboard-compact", String(compactView));
+    localStorage.setItem("invoice-dashboard-glass", String(glassSurfaces));
+    localStorage.setItem("invoice-dashboard-motion", String(motionEnabled));
+  }, [accentTheme, compactView, glassSurfaces, motionEnabled]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditing = target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "");
+      const hasOpenDialog = document.querySelector('[role="dialog"][data-state="open"]');
+      if (isEditing || hasOpenDialog || event.metaKey || event.ctrlKey || event.altKey) return;
+
+      if (event.key === "/") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (event.key.toLowerCase() === "n") {
+        navigate("/create?type=invoice");
+      } else if (event.key.toLowerCase() === "r") {
+        setReportType("all");
+        setReportDialogOpen(true);
+      } else if (event.key.toLowerCase() === "s") {
+        setSettingsDrawerOpen(true);
+      } else if (event.key.toLowerCase() === "c") {
+        setSearchQuery("");
+        setFilterPeriod("all");
+        setFilterType("all");
+        setPaymentFilter("all");
+        setSelectedCustomer("all");
+        setCustomDate(undefined);
+        setCustomRange({ from: undefined, to: undefined });
+      } else if (event.key === "[") {
+        setCurrentPage((page) => Math.max(1, page - 1));
+      } else if (event.key === "]") {
+        const maxPage = Math.max(1, Math.ceil(invoices.length / rowsPerPage));
+        setCurrentPage((page) => Math.min(maxPage, page + 1));
+      } else if (event.key === "?") {
+        setShortcutsOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, [navigate, invoices.length, rowsPerPage]);
 
   // Extract unique customers
   const uniqueCustomers = useMemo(() => {
@@ -991,28 +1105,25 @@ const AdminPortal = () => {
   };
 
   const isQuotation = (invoice: SavedInvoice) => {
-    return (
-      invoice.details.invoiceTitle?.toLowerCase().includes("quotation") ||
-      !!invoice.details.quotationNo
-    );
+    return isQuotationDocument(invoice.details);
   };
 
-  const getInvoiceDate = (invoice: SavedInvoice): Date => {
-    // Primary source for invoice listing/history date: details.date
-    // (the user-selected invoice date from the form).
-    // Fallback chain for backward compatibility with older records:
-    //   1) invoice.details.date (user-selected invoice date)
-    //   2) legacy: invoice.invoiceDate (older schema field name)
-    //   3) legacy: invoice.date (generic date field)
-    //   4) invoice.createdAt (server timestamp — last resort)
-    const invoiceDateValue: string | number | Date | undefined | null =
+const getInvoiceDate = (invoice: SavedInvoice): Date => {
+    // Primary source for invoice listing/history date: details.date (user-entered date).
+    // Backward compatibility for old invoices that don't have details.date:
+    // - Fall back to createdAt (server timestamp) if details.date is missing.
+    // - Fall back to savedAt (legacy backend) if createdAt is also missing.
+    // Priority order:
+    //   1) invoice.details.date (user-entered invoice date — new invoices)
+    //   2) invoice.createdAt (server timestamp — old invoices)
+    //   3) invoice.savedAt (legacy backend — very old invoices)
+    const createdAtValue: string | number | Date | undefined | null =
       invoice.details?.date ??
-      (invoice as { invoiceDate?: string | number | Date | null | undefined }).invoiceDate ??
-      (invoice as { date?: string | number | Date | null | undefined }).date ??
       (invoice as { createdAt?: string | number | Date | null | undefined }).createdAt ??
+      (invoice as { savedAt?: string | number | Date | null | undefined }).savedAt ??
       null;
 
-    return parseLocalDate(invoiceDateValue);
+    return parseLocalDate(createdAtValue);
   };
 
   // Get active filter display
@@ -1056,10 +1167,15 @@ const AdminPortal = () => {
       result = result.filter(
         (inv) =>
           inv.details.invoiceNo.toLowerCase().includes(lowerQuery) ||
+          inv.details.quotationNo.toLowerCase().includes(lowerQuery) ||
           inv.buyer.name.toLowerCase().includes(lowerQuery) ||
           inv.consignee.name.toLowerCase().includes(lowerQuery) ||
           inv.buyer.gstin?.toLowerCase().includes(lowerQuery)
       );
+    }
+
+    if (paymentFilter !== "all") {
+      result = result.filter((invoice) => getInvoicePaymentState(invoice) === paymentFilter);
     }
 
     // Apply type filter
@@ -1203,7 +1319,7 @@ const AdminPortal = () => {
       if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-
+    
     return result;
   }, [
     invoices,
@@ -1212,6 +1328,7 @@ const AdminPortal = () => {
     sortDirection,
     filterPeriod,
     filterType,
+    paymentFilter,
     selectedCustomer,
     customDate,
     customRange,
@@ -1228,12 +1345,19 @@ const AdminPortal = () => {
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, filterPeriod, filterType, selectedCustomer, customDate, customRange]);
+  }, [searchQuery, filterPeriod, filterType, paymentFilter, selectedCustomer, customDate, customRange]);
 
   // Calculate statistics
   const stats = useMemo(() => {
     const totalRevenue = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
     const uniqueCustomers = new Set(invoices.map((inv) => inv.buyer.name)).size;
+    const amountCollected = invoices.reduce((sum, invoice) => {
+      if (getInvoicePaymentState(invoice) === "paid") return sum + invoice.totalAmount;
+      return sum + Math.min(Math.max(invoice.amountPaid ?? 0, 0), invoice.totalAmount);
+    }, 0);
+    const overdueCount = invoices.filter(
+      (invoice) => getInvoicePaymentState(invoice) === "overdue"
+    ).length;
 
     const now = new Date();
     const thisMonthRevenue = invoices
@@ -1262,6 +1386,9 @@ const AdminPortal = () => {
       thisMonthCount,
       thisMonthRevenue,
       averageInvoice,
+      amountCollected,
+      outstandingAmount: Math.max(totalRevenue - amountCollected, 0),
+      overdueCount,
       total: invoices.length,
     };
   }, [invoices]);
@@ -1284,8 +1411,104 @@ const AdminPortal = () => {
   };
 
   const handlePrintInvoice = (invoice: SavedInvoice) => {
-    // Set the invoice data to render in the print overlay
+    setReportInvoices(null);
     setPrintInvoiceData(invoice);
+  };
+
+  const handleSetPaymentStatus = async (
+    invoice: SavedInvoice,
+    paymentStatus: "paid" | "unpaid"
+  ) => {
+    if (invoice.paymentStatus === undefined) return;
+
+    try {
+      await saveInvoice({
+        ...invoice,
+        paymentStatus,
+        amountPaid: paymentStatus === "paid" ? invoice.totalAmount : 0,
+      });
+      toast.success(`Marked ${invoice.details.invoiceNo || invoice.details.quotationNo} ${paymentStatus}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update payment status.");
+    }
+  };
+
+  const handleExportCsv = () => {
+    if (filteredInvoices.length === 0) {
+      toast.info("There are no invoices in the current view to export.");
+      return;
+    }
+
+    const csvCell = (value: unknown) => {
+      const text = String(value ?? "");
+      const safeText = /^[\s]*[=+@\-]/.test(text) ? `'${text}` : text;
+      return `"${safeText.replace(/"/g, '""')}"`;
+    };
+    const rows = [
+      ["Document Type", "Document Number", "Date", "Due Date", "Customer", "GSTIN", "Total", "Received", "Outstanding", "Payment Status"],
+      ...filteredInvoices.map((invoice) => {
+        const paymentState = getInvoicePaymentState(invoice);
+        const amountPaid = paymentState === "paid"
+          ? invoice.totalAmount
+          : Math.min(Math.max(invoice.amountPaid ?? 0, 0), invoice.totalAmount);
+        return [
+          isQuotation(invoice) ? "Quotation" : "Invoice",
+          invoice.details.invoiceNo || invoice.details.quotationNo,
+          formatDate(getInvoiceDate(invoice)),
+          invoice.details.dueDate ? formatDate(parseLocalDate(invoice.details.dueDate)) : "",
+          invoice.buyer.name,
+          invoice.buyer.gstin || "",
+          invoice.totalAmount.toFixed(2),
+          amountPaid.toFixed(2),
+          Math.max(invoice.totalAmount - amountPaid, 0).toFixed(2),
+          paymentState,
+        ];
+      }),
+    ];
+    const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(",")).join("\r\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `invoices-${format(new Date(), "yyyyMMdd")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success(`${filteredInvoices.length} invoice(s) exported.`);
+  };
+
+  const handleCopyDocumentNumber = async (invoice: SavedInvoice) => {
+    const documentNumber = invoice.details.invoiceNo || invoice.details.quotationNo;
+    if (!documentNumber) return toast.error("This document has no number to copy.");
+    try {
+      await navigator.clipboard.writeText(documentNumber);
+      toast.success(`${documentNumber} copied.`);
+    } catch {
+      toast.error("Clipboard access is unavailable in this browser.");
+    }
+  };
+
+  const handleShareInvoice = async (invoice: SavedInvoice) => {
+    const identifier = invoice._id || invoice.details.invoiceNo || invoice.details.quotationNo;
+    const documentNumber = invoice.details.invoiceNo || invoice.details.quotationNo || "Invoice";
+    const url = new URL(`/view/${encodeURIComponent(identifier)}`, window.location.origin).toString();
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: documentNumber, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success("Invoice link copied.");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      toast.error("Could not share this invoice link.");
+    }
+  };
+
+  const handleDuplicateInvoice = (invoice: SavedInvoice) => {
+    const identifier = invoice._id || invoice.details.invoiceNo || invoice.details.quotationNo;
+    const type = isQuotation(invoice) ? "quotation" : "invoice";
+    navigate(`/create?type=${type}&duplicate=${encodeURIComponent(identifier)}`);
   };
 
   const handleSort = (field: SortField) => {
@@ -1306,6 +1529,7 @@ const AdminPortal = () => {
     setSearchQuery("");
     setFilterPeriod("all");
     setFilterType("all");
+    setPaymentFilter("all");
     setSelectedCustomer("all");
     setCustomDate(undefined);
     setCustomRange({ from: undefined, to: undefined });
@@ -1378,7 +1602,7 @@ const generateReport = async (invoiceIds: string[]) => {
         // would match a REGULAR INVOICE whose invoiceNo coincidentally
         // equals the quotationNo being searched for.
         const local = invoices.find(
-          (inv) => inv.details.invoiceNo === id || inv.details.quotationNo === id
+          (inv) => inv._id === id || inv.details.invoiceNo === id || inv.details.quotationNo === id
         );
 
         // Validate that the local record has all required fields before using it
@@ -1418,7 +1642,7 @@ const generateReport = async (invoiceIds: string[]) => {
           // FIX: fall back to the local record (even if it was the reason we
           // tried the API in the first place) instead of dropping the invoice.
           const localFallback = invoices.find(
-            (inv) => inv.details.invoiceNo === id || inv.details.quotationNo === id
+            (inv) => inv._id === id || inv.details.invoiceNo === id || inv.details.quotationNo === id
           );
           if (localFallback) {
             fetchedInvoices.push(localFallback);
@@ -1444,34 +1668,10 @@ const generateReport = async (invoiceIds: string[]) => {
         );
       }
 
-// [DEBUG] Step 4: generate PDF directly using html2canvas+jsPDF pipeline
-      console.log("[DEBUG generateReport] STEP 4 - generating PDF for", fetchedInvoices.length, "invoices");
-
-      try {
-        const pdfBlob = await generateReportPdf(fetchedInvoices);
-        const url = URL.createObjectURL(pdfBlob);
-        
-        // Trigger download
-        const link = document.createElement("a");
-        link.href = url;
-        const reportTypeName = reportType === "all" ? "Complete" : reportType === "quotation" ? "Quotation" : reportType === "with_gst" ? "GST" : "NonGST";
-        link.download = `InvoiceReport_${reportTypeName}_${new Date().toISOString().split("T")[0]}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        // Clean up the blob URL after a short delay
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-        
-        toast.success(
-          `Report generated: ${fetchedInvoices.length} invoice(s) in PDF.`
-        );
-      } catch (pdfError) {
-        console.error("Error generating PDF:", pdfError);
-        toast.error("Failed to generate PDF. Falling back to print view.");
-        // Fallback: use the ReportPrintView overlay with window.print()
-        setReportInvoices(fetchedInvoices);
-      }
+      const reportDocuments = deduplicateReportInvoices(fetchedInvoices);
+      setPrintInvoiceData(null);
+      setReportInvoices(reportDocuments);
+      toast.success("Report ready. Save it as PDF from the print dialog.");
     } catch (error) {
       console.error("Error generating report:", error);
       toast.error("Failed to generate report. Please try again.");
@@ -1485,9 +1685,9 @@ const generateReport = async (invoiceIds: string[]) => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={cn("dashboard-root min-h-screen bg-background", compactView && "dashboard-compact", glassSurfaces && "dashboard-glass", !motionEnabled && "dashboard-static")}>
       {/* Header */}
-      <header className="bg-card border-b border-border sticky top-0 z-20 shadow-sm">
+      <header className="no-print bg-card border-b border-border sticky top-0 z-20 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-md transition-transform hover:scale-105 duration-200">
@@ -1508,7 +1708,7 @@ const generateReport = async (invoiceIds: string[]) => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Download Reports (PDF)</DropdownMenuLabel>
+                <DropdownMenuLabel>Print or Save Reports (PDF)</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => openReportDialog("all")}
@@ -1561,6 +1761,28 @@ const generateReport = async (invoiceIds: string[]) => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShortcutsOpen(true)}
+              className="shadow-sm"
+              title="Keyboard shortcuts"
+              aria-label="Keyboard shortcuts"
+            >
+              <Keyboard className="h-5 w-5" />
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setAppearanceOpen(true)}
+              className="shadow-sm"
+              title="Appearance"
+              aria-label="Appearance"
+            >
+              <Palette className="h-5 w-5" />
+            </Button>
 
             {/* Settings Button */}
             <Button
@@ -1634,7 +1856,7 @@ const generateReport = async (invoiceIds: string[]) => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="no-print max-w-7xl mx-auto px-4 py-8">
         {/* Stats */}
         <DashboardStats stats={stats} />
 
@@ -1646,6 +1868,7 @@ const generateReport = async (invoiceIds: string[]) => {
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
+                    ref={searchInputRef}
                     placeholder="Search invoices by number, customer, or GSTIN..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -1676,6 +1899,23 @@ const generateReport = async (invoiceIds: string[]) => {
                       <SelectItem value="quotation">Quotations</SelectItem>
                       <SelectItem value="with_gst">With GST</SelectItem>
                       <SelectItem value="without_gst">Without GST</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select
+                    value={paymentFilter}
+                    onValueChange={(value: PaymentFilter) => setPaymentFilter(value)}
+                  >
+                    <SelectTrigger className="w-[160px]">
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Payment status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Payments</SelectItem>
+                      <SelectItem value="unpaid">Unpaid</SelectItem>
+                      <SelectItem value="partial">Partial</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="overdue">Overdue</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -1744,10 +1984,14 @@ const generateReport = async (invoiceIds: string[]) => {
                   {searchQuery && ` for "${searchQuery}"`}
                   {filterPeriod !== "all" && ` in ${activeFilterDisplay}`}
                   {filterType !== "all" && ` (${filterType.replace("_", " ")})`}
+                  {paymentFilter !== "all" && ` · ${paymentFilter}`}
                   {selectedCustomer !== "all" && ` for ${selectedCustomer}`}
                 </p>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="sm" onClick={handleExportCsv}>
+                  <Download className="h-4 w-4 mr-2" /> Export CSV
+                </Button>
                 <span className="text-sm text-muted-foreground">Sort by:</span>
                 <Button
                   variant="outline"
@@ -1786,6 +2030,7 @@ const generateReport = async (invoiceIds: string[]) => {
                   {searchQuery ||
                   filterPeriod !== "all" ||
                   filterType !== "all" ||
+                  paymentFilter !== "all" ||
                   selectedCustomer !== "all"
                     ? "No matching invoices found"
                     : "No invoices yet"}
@@ -1794,6 +2039,7 @@ const generateReport = async (invoiceIds: string[]) => {
                   {searchQuery ||
                   filterPeriod !== "all" ||
                   filterType !== "all" ||
+                  paymentFilter !== "all" ||
                   selectedCustomer !== "all"
                     ? "Try adjusting your search terms or filters to find what you're looking for."
                     : "Create your first invoice to start managing your billing and payments."}
@@ -1949,13 +2195,21 @@ onClick={() =>
                               </div>
                             </TableCell>
                             <TableCell className="text-center">
-                              <Badge
-                                variant="outline"
-                                className="bg-green-50 text-green-700 border-green-200"
-                              >
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Paid
-                              </Badge>
+                              {(() => {
+                                const paymentState = getInvoicePaymentState(invoice);
+                                const paymentStyles = {
+                                  paid: "bg-green-50 text-green-700 border-green-200",
+                                  partial: "bg-blue-50 text-blue-700 border-blue-200",
+                                  unpaid: "bg-slate-50 text-slate-700 border-slate-200",
+                                  overdue: "bg-red-50 text-red-700 border-red-200",
+                                };
+                                return (
+                                  <Badge variant="outline" className={paymentStyles[paymentState]}>
+                                    {paymentState === "paid" ? <CheckCircle className="h-3 w-3 mr-1" /> : null}
+                                    {paymentState.charAt(0).toUpperCase() + paymentState.slice(1)}
+                                  </Badge>
+                                );
+                              })()}
                             </TableCell>
                             <TableCell className="text-center">
                               <div
@@ -2019,6 +2273,28 @@ onClick={() =>
                                     >
                                       <Printer className="h-4 w-4 mr-2" /> Print
                                     </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => void handleCopyDocumentNumber(invoice)}>
+                                      <Copy className="h-4 w-4 mr-2" /> Copy number
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => void handleShareInvoice(invoice)}>
+                                      <Share2 className="h-4 w-4 mr-2" /> Share link
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDuplicateInvoice(invoice)}>
+                                      <Copy className="h-4 w-4 mr-2" /> Duplicate as new
+                                    </DropdownMenuItem>
+
+                                    {invoice.paymentStatus !== undefined && (
+                                      <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuLabel>Payment status</DropdownMenuLabel>
+                                        <DropdownMenuItem onClick={() => void handleSetPaymentStatus(invoice, "paid")}>
+                                          <CheckCircle className="h-4 w-4 mr-2 text-green-600" /> Mark Paid
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => void handleSetPaymentStatus(invoice, "unpaid")}>
+                                          <Clock className="h-4 w-4 mr-2 text-amber-600" /> Mark Unpaid
+                                        </DropdownMenuItem>
+                                      </>
+                                    )}
 
                                     <DropdownMenuSeparator />
                                     <AlertDialog>
@@ -2169,6 +2445,105 @@ onClick={() =>
         open={settingsDrawerOpen}
         onOpenChange={setSettingsDrawerOpen}
       />
+
+      <Dialog open={appearanceOpen} onOpenChange={setAppearanceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Appearance</DialogTitle>
+            <DialogDescription>Personalize the invoice dashboard on this device.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="appearance-dark">Dark mode</Label>
+                <p className="text-xs text-muted-foreground">Use the low-light color scheme.</p>
+              </div>
+              <Switch id="appearance-dark" checked={theme === "dark"} onCheckedChange={(enabled) => setTheme(enabled ? "dark" : "light")} />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Accent color</Label>
+              <div className="flex items-center gap-3">
+                {[
+                  { id: "forest" as const, label: "Forest green", color: "#26705d" },
+                  { id: "ocean" as const, label: "Ocean blue", color: "#187c9e" },
+                  { id: "coral" as const, label: "Coral", color: "#d65f4c" },
+                ].map((swatch) => (
+                  <button
+                    key={swatch.id}
+                    type="button"
+                    aria-label={swatch.label}
+                    aria-pressed={accentTheme === swatch.id}
+                    title={swatch.label}
+                    onClick={() => setAccentTheme(swatch.id)}
+                    className={cn("h-9 w-9 rounded-full border-2 border-background shadow-sm ring-offset-2", accentTheme === swatch.id && "ring-2 ring-ring")}
+                    style={{ backgroundColor: swatch.color }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="appearance-compact">Compact view</Label>
+                <p className="text-xs text-muted-foreground">Fit more invoices on screen.</p>
+              </div>
+              <Switch id="appearance-compact" checked={compactView} onCheckedChange={setCompactView} />
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="appearance-glass">Glass surfaces</Label>
+                <p className="text-xs text-muted-foreground">Add subtle blur to dashboard panels.</p>
+              </div>
+              <Switch id="appearance-glass" checked={glassSurfaces} onCheckedChange={setGlassSurfaces} />
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Label htmlFor="appearance-motion">Motion effects</Label>
+                <p className="text-xs text-muted-foreground">Enable or reduce interface animation.</p>
+              </div>
+              <Switch id="appearance-motion" checked={motionEnabled} onCheckedChange={setMotionEnabled} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Keyboard shortcuts</DialogTitle>
+            <DialogDescription>Quick actions for the invoice dashboard.</DialogDescription>
+          </DialogHeader>
+          <div className="divide-y divide-border rounded-md border">
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Focus invoice search</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">/</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Create an invoice</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">N</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Open complete report</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">R</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Open settings</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">S</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Clear filters</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">C</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Previous page</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">[</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Next page</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">]</kbd>
+            </div>
+            <div className="flex items-center justify-between px-3 py-2.5 text-sm">
+              <span>Open this reference</span><kbd className="rounded border bg-muted px-2 py-1 font-mono">?</kbd>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Report Dialog */}
       <ReportDialog
@@ -2333,7 +2708,7 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({
           className="report-invoice-page"
           style={
             idx < invoiceCount - 1
-              ? { pageBreakAfter: "always", marginBottom: 0 }
+              ? { pageBreakAfter: "always", breakAfter: "page", marginBottom: 0 }
               : {}
           }
         >
@@ -2365,7 +2740,8 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({
       <style>{`
 @media print {
           .report-invoice-page {
-            page-break-inside: avoid;
+            page-break-inside: auto;
+            break-inside: auto;
             width: 100%;
           }
           .no-print {
@@ -2482,7 +2858,4 @@ const SingleInvoicePrintView: React.FC<SingleInvoicePrintViewProps> = ({
     </div>
   );
 };
-
-
 export default AdminPortal;
-

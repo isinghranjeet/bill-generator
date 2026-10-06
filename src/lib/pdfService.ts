@@ -147,29 +147,42 @@ function buildPrintMimicCss(): string {
 }
 
 // -----------------------------------------------------------------------
-// Render an invoice into a temporary hidden DOM element and capture it
-// with html2canvas + jsPDF, page by page.
+// Render one invoice into a NEW temporary hidden DOM element and capture
+// it with html2canvas.
+//
+// This is the SINGLE source of truth for the rendering lifecycle used by
+// BOTH renderInvoiceToPdf() (single-invoice PDF) and generateReportPdf()
+// (multi-invoice report PDF), so the two pipelines can never diverge:
+//
+//   1. Create a NEW, fresh hidden container (no leftover DOM, no stale
+//      layout from a previous invoice).
+//   2. Append it to document.body.
+//   3. Create a NEW React root bound to that container.
+//   4. Render <StrictMode><ProfessionalInvoice …/></StrictMode>.
+//   5. Wait for the render to settle:
+//        - 500ms for the React commit
+//        - document.fonts.ready (web fonts)
+//        - every <img> to finish loading (+300ms settle)
+//        - TWO requestAnimationFrame cycles (layout fully finalized)
+//   6. Capture with the shared html2canvas configuration (PNG, scale 3,
+//      print-mimic CSS injected via onclone).
+//   7. Return the canvas; the caller is responsible for PDF slicing.
+//   8/9. In finally: remove the data attribute, unmount the React root,
+//      clear, and REMOVE the temporary container.
 // -----------------------------------------------------------------------
-async function renderInvoiceToPdf(
-  invoice: InvoiceData,
-  _options?: { title?: string }
-): Promise<jsPDF> {
-  const containerId = "pdf-render-container";
-  let container = document.getElementById(containerId);
+async function renderInvoiceToCanvas(invoice: InvoiceData): Promise<HTMLCanvasElement> {
+  // 1. Create a NEW hidden container for EVERY invoice so no state/layout
+  //    can leak between captures (identical to the single-invoice path).
+  const container = document.createElement("div");
+  container.style.position = "absolute";
+  container.style.left = "-9999px";
+  container.style.top = "0";
+  container.style.width = "210mm";
+  container.style.backgroundColor = "#ffffff";
+  container.style.zIndex = "-1";
 
-  if (!container) {
-    container = document.createElement("div");
-    container.id = containerId;
-    container.style.position = "absolute";
-    container.style.left = "-9999px";
-    container.style.top = "0";
-    container.style.width = "210mm";
-    container.style.backgroundColor = "#ffffff";
-    container.style.zIndex = "-1";
-    document.body.appendChild(container);
-  } else {
-    container.innerHTML = "";
-  }
+  // 2. Append it to document.body before rendering/capturing.
+  document.body.appendChild(container);
 
   // Dynamically import ProfessionalInvoice and React/ReactDOM to render
   const { createElement, StrictMode } = await import("react");
@@ -178,7 +191,7 @@ async function renderInvoiceToPdf(
     "@/components/invoice/ProfessionalInvoice"
   );
 
-  // Create a root and render the invoice
+  // 3. Create a NEW root and 4. render the invoice.
   const root = createRoot(container);
   root.render(
     createElement(StrictMode, null,
@@ -204,7 +217,8 @@ async function renderInvoiceToPdf(
     )
   );
 
-  // Wait for React rendering to settle
+  // 5. Wait for the render to settle.
+  // Wait for React commit
   await new Promise((resolve) => setTimeout(resolve, 500));
 
   // Wait for web fonts to load
@@ -231,12 +245,18 @@ async function renderInvoiceToPdf(
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
+  // TWO requestAnimationFrame cycles — guarantees React has committed and
+  // the browser has painted/finalized layout before html2canvas captures.
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
+
   // Mark the container so the print-mimic CSS takes effect
   container.setAttribute("data-pdf-capture", "");
 
   try {
-    // Capture the entire invoice as one tall canvas using PNG (lossless)
-    const canvas = await html2canvas(container, {
+    // 6. Capture the entire invoice as one tall canvas using PNG (lossless)
+    return await html2canvas(container, {
       scale: 3,
       useCORS: true,
       allowTaint: false,
@@ -250,46 +270,61 @@ async function renderInvoiceToPdf(
         clonedDoc.head.appendChild(styleEl);
       },
     });
-
-    const imgData = canvas.toDataURL("image/png"); // lossless PNG
-
-    // A4 dimensions in mm
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pdfWidth = pdf.internal.pageSize.getWidth();   // 210mm
-    const pdfHeight = pdf.internal.pageSize.getHeight();  // 297mm
-
-    // Calculate how many A4 pages the content spans
-    const canvasPageHeight = (pdfHeight * canvas.width) / pdfWidth;
-    const totalPages = Math.ceil(canvas.height / canvasPageHeight);
-
-    for (let page = 0; page < totalPages; page++) {
-      if (page > 0) pdf.addPage();
-
-      // Calculate the source slice for this page
-      const srcY = page * canvasPageHeight;
-      const srcHeight = Math.min(canvasPageHeight, canvas.height - srcY);
-
-      // Create a temporary canvas just for this page's slice
-      const pageCanvas = document.createElement("canvas");
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = srcHeight;
-      const ctx = pageCanvas.getContext("2d")!;
-      ctx.drawImage(canvas, 0, srcY, canvas.width, srcHeight, 0, 0, canvas.width, srcHeight);
-
-      const pageImgData = pageCanvas.toDataURL("image/png");
-
-      // Calculate output dimensions maintaining aspect ratio
-      const imgHeightOnPage = (pdfWidth * srcHeight) / canvas.width;
-      pdf.addImage(pageImgData, "PNG", 0, 0, pdfWidth, imgHeightOnPage);
-    }
-
-    return pdf;
   } finally {
-    // Cleanup: remove the data attribute and unmount
+    // 8/9. Cleanup: remove data attribute, unmount root, remove container.
     container.removeAttribute("data-pdf-capture");
     root.unmount();
     container.innerHTML = "";
+    container.remove();
   }
+}
+
+// -----------------------------------------------------------------------
+// Render an invoice into a temporary hidden DOM element and capture it
+// with html2canvas + jsPDF, page by page.
+//
+// Uses renderInvoiceToCanvas() (the shared rendering lifecycle), then
+// applies the A4 page-slicing logic. Returns a single jsPDF document.
+// -----------------------------------------------------------------------
+async function renderInvoiceToPdf(
+  invoice: InvoiceData,
+  _options?: { title?: string }
+): Promise<jsPDF> {
+  const canvas = await renderInvoiceToCanvas(invoice);
+
+  const imgData = canvas.toDataURL("image/png"); // lossless PNG
+
+  // A4 dimensions in mm
+  const pdf = new jsPDF("p", "mm", "a4");
+  const pdfWidth = pdf.internal.pageSize.getWidth();   // 210mm
+  const pdfHeight = pdf.internal.pageSize.getHeight();  // 297mm
+
+  // Calculate how many A4 pages the content spans
+  const canvasPageHeight = (pdfHeight * canvas.width) / pdfWidth;
+  const totalPages = Math.ceil(canvas.height / canvasPageHeight);
+
+  for (let page = 0; page < totalPages; page++) {
+    if (page > 0) pdf.addPage();
+
+    // Calculate the source slice for this page
+    const srcY = page * canvasPageHeight;
+    const srcHeight = Math.min(canvasPageHeight, canvas.height - srcY);
+
+    // Create a temporary canvas just for this page's slice
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = srcHeight;
+    const ctx = pageCanvas.getContext("2d")!;
+    ctx.drawImage(canvas, 0, srcY, canvas.width, srcHeight, 0, 0, canvas.width, srcHeight);
+
+    const pageImgData = pageCanvas.toDataURL("image/png");
+
+    // Calculate output dimensions maintaining aspect ratio
+    const imgHeightOnPage = (pdfWidth * srcHeight) / canvas.width;
+    pdf.addImage(pageImgData, "PNG", 0, 0, pdfWidth, imgHeightOnPage);
+  }
+
+  return pdf;
 }
 
 /**
@@ -308,12 +343,17 @@ export async function generateInvoicePdf(
 
 /**
  * Generates a combined PDF report from multiple invoices.
- * Uses the EXACT SAME ProfessionalInvoice rendering, html2canvas pipeline,
- * print-mimic CSS injection, and page-slicing logic as renderInvoiceToPdf
- * (which is used by generateInvoicePdf for single-invoice PDFs).
  *
- * The only difference is that this accumulates all invoices into a single
- * jsPDF document, with each invoice starting on a new A4 page.
+ * Uses renderInvoiceToCanvas() — the SAME rendering lifecycle used by
+ * renderInvoiceToPdf() (single-invoice PDF) — for EVERY invoice in the
+ * report. Each invoice gets a fresh hidden container, a fresh React root,
+ * and the full settle+font+image+double-rAF waiting strategy before the
+ * identical html2canvas capture, so each report page is pixel-identical
+ * to the single-invoice PDF (and to the on-screen ProfessionalInvoice).
+ *
+ * The ONLY difference from renderInvoiceToPdf() is that this accumulates
+ * all captured canvases into a single jsPDF document, with each invoice
+ * starting on a new A4 page. The PDF page-slicing logic is unchanged.
  */
 export async function generateReportPdf(
   invoices: InvoiceData[],
@@ -323,120 +363,22 @@ export async function generateReportPdf(
     throw new Error("No invoices to generate report");
   }
 
-  // Dynamically import React and ProfessionalInvoice ONCE before the loop
-  const { createElement, StrictMode } = await import("react");
-  const { createRoot } = await import("react-dom/client");
-  const { ProfessionalInvoice } = await import(
-    "@/components/invoice/ProfessionalInvoice"
-  );
-
   const pdf = new jsPDF("p", "mm", "a4");
   const pdfWidth = pdf.internal.pageSize.getWidth();   // 210mm
   const pdfHeight = pdf.internal.pageSize.getHeight();  // 297mm
-
-  // Shared hidden container (same approach as renderInvoiceToPdf)
-  const containerId = "pdf-report-render-container";
-  let container = document.getElementById(containerId) as HTMLDivElement | null;
-
-  if (!container) {
-    container = document.createElement("div");
-    container.id = containerId;
-    container.style.position = "absolute";
-    container.style.left = "-9999px";
-    container.style.top = "0";
-    container.style.width = "210mm";
-    container.style.backgroundColor = "#ffffff";
-    container.style.zIndex = "-1";
-    document.body.appendChild(container);
-  }
-
-  // Root is created/cleared per-invoice but we keep the variable for cleanup
-  let root: unknown = null;
 
   try {
     for (let i = 0; i < invoices.length; i++) {
       const inv = invoices[i];
 
-      // Clear previous content
-      if (root) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (root as any).unmount();
-        root = null;
-      }
-      container.innerHTML = "";
-
-      // Create new root and render
-      root = createRoot(container);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (root as any).render(
-        createElement(StrictMode, null,
-          createElement(ProfessionalInvoice, {
-            company: inv.company,
-            consignee: inv.consignee,
-            buyer: inv.buyer,
-            details: {
-              ...inv.details,
-              date: new Date(inv.details.date),
-              invoiceTitle: inv.details.invoiceTitle ?? "TAX INVOICE",
-            },
-            items: inv.items,
-            remarks: inv.remarks,
-            editable: false,
-            onCompanyChange: () => {},
-            onConsigneeChange: () => {},
-            onBuyerChange: () => {},
-            onDetailsChange: () => {},
-            onItemsChange: () => {},
-            onRemarksChange: () => {},
-          })
-        )
-      );
-
-      // Wait for React rendering to settle
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Wait for web fonts
-      if (document.fonts && typeof document.fonts.ready !== "undefined") {
-        await document.fonts.ready;
-      }
-
-      // Wait for images to load
-      const images = container.querySelectorAll("img");
-      if (images.length > 0) {
-        await Promise.all(
-          Array.from(images).map(
-            (img) =>
-              new Promise<void>((resolve) => {
-                if (img.complete) resolve();
-                else {
-                  img.onload = () => resolve();
-                  img.onerror = () => resolve();
-                }
-              })
-          )
-        );
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
-
-      // Mark container so print-mimic CSS takes effect (same as renderInvoiceToPdf)
-      container.setAttribute("data-pdf-capture", "");
-
-      // Capture with html2canvas — EXACT same settings as renderInvoiceToPdf
-      const canvas = await html2canvas(container, {
-        scale: 3,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#ffffff",
-        logging: false,
-        onclone: (clonedDoc) => {
-          const styleEl = clonedDoc.createElement("style");
-          styleEl.setAttribute("data-pdf-mimic", "");
-          styleEl.textContent = buildPrintMimicCss();
-          clonedDoc.head.appendChild(styleEl);
-        },
-      });
+      // Render THIS invoice with the exact same lifecycle as the
+      // single-invoice path: fresh container + fresh root + full
+      // settle strategy + shared capture config. Cleanup (unmount,
+      // clear, remove) happens inside renderInvoiceToCanvas().
+      const canvas = await renderInvoiceToCanvas(inv);
 
       // Slice the tall canvas into A4 pages and add to combined PDF
+      // (logic unchanged).
       const canvasPageHeight = (pdfHeight * canvas.width) / pdfWidth;
       const totalPages = Math.ceil(canvas.height / canvasPageHeight);
 
@@ -459,27 +401,13 @@ export async function generateReportPdf(
         const imgHeightOnPage = (pdfWidth * srcHeight) / canvas.width;
         pdf.addImage(pageImgData, "PNG", 0, 0, pdfWidth, imgHeightOnPage);
       }
-
-      // Cleanup per-invoice
-      container.removeAttribute("data-pdf-capture");
     }
 
     return pdf.output("blob");
   } finally {
-    // Final cleanup: unmount root, clear content, but DO NOT remove the
-    // container from the DOM — it will be reused for the next invoice.
-    // Removing it detaches the element, causing html2canvas to fail on
-    // subsequent iterations because the element is no longer in the DOM tree.
-    if (root) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (root as any).unmount();
-      } catch { /* ignore */ }
-    }
-    if (container) {
-      container.innerHTML = "";
-      container.removeAttribute("data-pdf-capture");
-    }
+    // No persistent container/root to clean up — every invoice's
+    // container and root were already removed/unmounted inside
+    // renderInvoiceToCanvas().
   }
 }
 

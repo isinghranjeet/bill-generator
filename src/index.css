@@ -1,5 +1,5 @@
 /* 1️⃣ Google Font MUST be first */
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap");
 
 /* 2️⃣ Tailwind directives */
 @tailwind base;
@@ -9,37 +9,35 @@
 /* 3️⃣ CSS variables & base theme */
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --background: 42 24% 97%;
+    --foreground: 162 24% 13%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 162 24% 13%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 162 24% 13%;
 
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 158 42% 30%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 38 22% 93%;
+    --secondary-foreground: 162 24% 13%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 40 18% 94%;
+    --muted-foreground: 160 8% 43%;
 
-    --accent: 221 83% 53%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 15 72% 55%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-
+    --border: 38 16% 86%;
+    --input: 38 16% 86%;
+    --ring: 158 42% 30%;
     --radius: 0.5rem;
 
-    /* Invoice specific colors */
     --invoice-border: 0 0% 0%;
     --invoice-header-bg: 221 83% 53%;
     --invoice-header-text: 0 0% 100%;
@@ -47,44 +45,44 @@
     --invoice-summary-bg: 45 100% 96%;
     --invoice-success: 142 76% 36%;
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5% 26%;
-    --sidebar-primary: 240 6% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 5% 96%;
-    --sidebar-accent-foreground: 240 6% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217 91% 60%;
+    --sidebar-background: 40 20% 95%;
+    --sidebar-foreground: 162 24% 13%;
+    --sidebar-primary: 158 42% 30%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 38 22% 91%;
+    --sidebar-accent-foreground: 162 24% 13%;
+    --sidebar-border: 38 16% 86%;
+    --sidebar-ring: 158 42% 30%;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --background: 164 22% 9%;
+    --foreground: 40 20% 94%;
 
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
+    --card: 164 18% 12%;
+    --card-foreground: 40 20% 94%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 164 18% 12%;
+    --popover-foreground: 40 20% 94%;
 
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 155 42% 58%;
+    --primary-foreground: 164 22% 9%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 164 14% 19%;
+    --secondary-foreground: 40 20% 94%;
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 164 14% 19%;
+    --muted-foreground: 155 9% 66%;
 
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 15 67% 62%;
+    --accent-foreground: 164 22% 9%;
 
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 213 27% 84%;
+      --border: 164 12% 25%;
+      --input: 164 12% 25%;
+      --ring: 155 42% 58%;
 
     --invoice-border: 0 0% 100%;
     --invoice-header-bg: 217 91% 60%;
@@ -102,6 +100,34 @@
     --sidebar-border: 240 4% 16%;
     --sidebar-ring: 217 91% 60%;
   }
+
+  html[data-accent="ocean"] {
+    --primary: 198 72% 36%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 198 72% 36%;
+    --sidebar-primary: 198 72% 36%;
+  }
+
+  html.dark[data-accent="ocean"] {
+    --primary: 194 67% 57%;
+    --primary-foreground: 164 22% 9%;
+    --ring: 194 67% 57%;
+    --sidebar-primary: 194 67% 57%;
+  }
+
+  html[data-accent="coral"] {
+    --primary: 14 72% 48%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 14 72% 48%;
+    --sidebar-primary: 14 72% 48%;
+  }
+
+  html.dark[data-accent="coral"] {
+    --primary: 14 68% 62%;
+    --primary-foreground: 164 22% 9%;
+    --ring: 14 68% 62%;
+    --sidebar-primary: 14 68% 62%;
+  }
 }
 
 /* 4️⃣ Global base styles */
@@ -112,12 +138,68 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-family: "Inter", system-ui, sans-serif;
+      font-family: "DM Sans", system-ui, sans-serif;
   }
 }
 
 /* 5️⃣ Components */
 @layer components {
+  .invoice-paper {
+    --background: 42 24% 97%;
+    --foreground: 162 24% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 162 24% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 162 24% 13%;
+    --primary: 158 42% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 38 22% 93%;
+    --secondary-foreground: 162 24% 13%;
+    --muted: 40 18% 94%;
+    --muted-foreground: 160 8% 43%;
+    --accent: 15 72% 55%;
+    --accent-foreground: 0 0% 100%;
+    --border: 38 16% 86%;
+    --input: 38 16% 86%;
+    --ring: 158 42% 30%;
+    color-scheme: light;
+  }
+
+  .dashboard-compact main {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .dashboard-compact main > .mb-6 {
+    margin-bottom: 0.75rem;
+  }
+
+  .dashboard-compact main table th,
+  .dashboard-compact main table td {
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+  }
+
+  .dashboard-glass > header {
+    background-color: hsl(var(--card) / 0.78) !important;
+    backdrop-filter: blur(16px);
+  }
+
+  .dashboard-glass main > .mb-6,
+  .dashboard-glass main > .shadow-sm {
+    background-color: hsl(var(--card) / 0.78) !important;
+    backdrop-filter: blur(14px);
+  }
+
+  .dashboard-static *,
+  .dashboard-static *::before,
+  .dashboard-static *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
   .invoice-container {
     @apply bg-card shadow-lg rounded-lg overflow-hidden;
   }

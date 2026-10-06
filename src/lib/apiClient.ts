@@ -1,12 +1,4 @@
-const API_BASE_RAW = import.meta.env.VITE_API_URL;
-
-if (!API_BASE_RAW) {
-  throw new Error("Missing VITE_API_URL in .env");
-}
-
-// Normalize to prevent accidental `/api/api/`.
-// Example expected: `http://localhost:4000/api`.
-const API_BASE = API_BASE_RAW.replace(/\/$/, "");
+import { buildApiUrl } from "@/lib/apiConfig";
 
 export function getToken() {
   return localStorage.getItem("token") || "";
@@ -29,16 +21,7 @@ export async function apiFetch<T = unknown>(
     headers?: Record<string, string>;
   } = {}
 ): Promise<T> {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-
-  // Prevent accidental double /api segments in the caller.
-  // Example: if caller passes `/api/invoices`, keep it as-is (do NOT strip `/api`).
-  // This repo expects the backend API to be mounted at `/api`.
-  const cleanedPath = normalizedPath;
-
-
-
-const url = `${API_BASE}${cleanedPath}`;
+  const url = buildApiUrl(path);
 
   const res = await fetch(url, {
 

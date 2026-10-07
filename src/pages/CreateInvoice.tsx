@@ -7,7 +7,8 @@ import { useInvoiceStorage } from "@/hooks/useInvoiceStorage";
 import { putInvoice } from "@/lib/invoiceCache";
 
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
-import { PdfPaymentStatusDialog, type PdfPaymentStatus } from "@/components/invoice/PdfPaymentStatusDialog";
+// REMOVED: Paid/Unpaid selection dialog (status now changes only via Action menu)
+// import { PdfPaymentStatusDialog, type PdfPaymentStatus } from "@/components/invoice/PdfPaymentStatusDialog";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Printer, Save, RotateCcw, Eye, Edit, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -113,7 +114,8 @@ const CreateInvoice = () => {
 
   const [invoiceData, setInvoiceData] = useState<InvoiceData>(defaultInvoiceData);
   const [editable, setEditable] = useState(true);
-  const [pdfStatusOpen, setPdfStatusOpen] = useState(false);
+  // REMOVED: state for the Paid/Unpaid dialog
+  // const [pdfStatusOpen, setPdfStatusOpen] = useState(false);
   const [duplicateLoaded, setDuplicateLoaded] = useState(!duplicateSource);
 
   // Prevent double-consume on strict-mode remounts
@@ -322,8 +324,16 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [documentType, duplicateLoaded]);
 
-  const handlePrint = () => {
-    setPdfStatusOpen(true);
+  // OLD: Print used to open the Paid/Unpaid dialog first
+  // const handlePrint = () => {
+  //   setPdfStatusOpen(true);
+  // };
+
+  // NEW: Print now saves directly (payment status is untouched) and then prints
+  const handlePrint = async () => {
+    const saved = await handleSave();
+    if (!saved) return;
+    window.setTimeout(printInvoice, 100);
   };
 
   const printInvoice = () => {
@@ -360,7 +370,9 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
     toast.success("Invoice reset successfully!");
   };
 
-  const handleSave = async (pdfPaymentStatus?: PdfPaymentStatus): Promise<boolean> => {
+  // OLD signature (accepted a payment status from the dialog):
+  // const handleSave = async (pdfPaymentStatus?: PdfPaymentStatus): Promise<boolean> => {
+  const handleSave = async (): Promise<boolean> => {
     if (!invoiceData.buyer.name.trim()) {
       toast.error("Please enter buyer name");
       return false;
@@ -407,10 +419,14 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
       totalAmount,
       totalTax,
       totalAmountInWords: convertToWords(totalAmount),
-      paymentStatus: pdfPaymentStatus ?? invoiceData.paymentStatus ?? "unpaid",
-      amountPaid: pdfPaymentStatus
-        ? pdfPaymentStatus === "paid" ? totalAmount : 0
-        : invoiceData.amountPaid ?? 0,
+      // OLD: status was overwritten from the dialog choice
+      // paymentStatus: pdfPaymentStatus ?? invoiceData.paymentStatus ?? "unpaid",
+      // amountPaid: pdfPaymentStatus
+      //   ? pdfPaymentStatus === "paid" ? totalAmount : 0
+      //   : invoiceData.amountPaid ?? 0,
+      // NEW: keep existing status (new invoices default to "unpaid")
+      paymentStatus: invoiceData.paymentStatus ?? "unpaid",
+      amountPaid: invoiceData.amountPaid ?? 0,
     };
 
     try {
@@ -426,11 +442,12 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
     }
   };
 
-  const handleConfirmPdfStatus = async (status: PdfPaymentStatus) => {
-    const saved = await handleSave(status);
-    if (!saved) throw new Error("Complete the required invoice details before saving the PDF.");
-    window.setTimeout(printInvoice, 100);
-  };
+  // REMOVED: handler that received the Paid/Unpaid choice from the dialog
+  // const handleConfirmPdfStatus = async (status: PdfPaymentStatus) => {
+  //   const saved = await handleSave(status);
+  //   if (!saved) throw new Error("Complete the required invoice details before saving the PDF.");
+  //   window.setTimeout(printInvoice, 100);
+  // };
 
   const handleSaveAndNew = () => {
     handleSave();
@@ -566,7 +583,7 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
               <Save className="h-4 w-4 mr-2" />
               Save & New
             </Button>
-            <Button onClick={handlePrint}>
+            <Button onClick={() => void handlePrint()}>
               <Printer className="h-4 w-4 mr-2" />
               Print
             </Button>
@@ -605,16 +622,17 @@ const docTypeRaw = documentType?.toLowerCase().trim() ?? "";
             Note: For best print results, use Chrome or Edge browser. Ensure "Background graphics" is enabled in print settings.
           </p>
         </div>
+        {/* REMOVED: Paid/Unpaid selection dialog
         <PdfPaymentStatusDialog
           open={pdfStatusOpen}
           invoice={invoiceData}
           onOpenChange={setPdfStatusOpen}
           onConfirm={handleConfirmPdfStatus}
         />
+        */}
       </div>
     </div>
   );
 };
 
 export default CreateInvoice;
-

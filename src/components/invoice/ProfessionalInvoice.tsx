@@ -373,7 +373,8 @@ export const ProfessionalInvoice = React.memo(({
               <Input
                 type="number"
                 min="0"
-                step="0.01"
+                /* OLD: step="0.01" (arrow se 0.01 badhta/ghatta tha) */
+                step="1"
                 value={item.rate}
                 onChange={(e) => updateItem(index, 'rate', parseFloat(e.target.value) || 0)}
                 className="h-5 text-xs text-right w-full"

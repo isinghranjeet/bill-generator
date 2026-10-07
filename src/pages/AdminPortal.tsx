@@ -118,6 +118,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ProfessionalInvoice } from "@/components/invoice/ProfessionalInvoice";
+import { generateReportPdf } from "@/lib/pdfService";
 import { SettingsDrawer } from "@/components/settings";
 import { cn } from "@/lib/utils";
 
@@ -1441,7 +1442,7 @@ const getInvoiceDate = (invoice: SavedInvoice): Date => {
 
     const csvCell = (value: unknown) => {
       const text = String(value ?? "");
-      const safeText = /^[\s]*[=+@\-]/.test(text) ? `'${text}` : text;
+      const safeText = /^[\s]*[=+@-]/.test(text) ? `'${text}` : text;
       return `"${safeText.replace(/"/g, '""')}"`;
     };
     const rows = [
@@ -1670,8 +1671,31 @@ const generateReport = async (invoiceIds: string[]) => {
 
       const reportDocuments = deduplicateReportInvoices(fetchedInvoices);
       setPrintInvoiceData(null);
-      setReportInvoices(reportDocuments);
-      toast.success("Report ready. Save it as PDF from the print dialog.");
+      toast.loading(`Preparing PDF with ${reportDocuments.length} bill(s)...`, { id: "report-pdf-export" });
+
+      try {
+        const reportBlob = await generateReportPdf(reportDocuments);
+        const url = URL.createObjectURL(reportBlob);
+        const link = document.createElement("a");
+        const reportTypeName = reportType === "all"
+          ? "Complete"
+          : reportType === "quotation"
+            ? "Quotation"
+            : reportType === "with_gst"
+              ? "GST"
+              : "NonGST";
+        link.href = url;
+        link.download = `InvoiceReport_${reportTypeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        toast.success(`Downloaded PDF with ${reportDocuments.length} bill(s).`, { id: "report-pdf-export" });
+      } catch (pdfError) {
+        console.error("Report PDF export failed:", pdfError);
+        toast.error("PDF export failed. Opening the multi-bill print view instead.", { id: "report-pdf-export" });
+        setReportInvoices(reportDocuments);
+      }
     } catch (error) {
       console.error("Error generating report:", error);
       toast.error("Failed to generate report. Please try again.");
@@ -2648,11 +2672,27 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({
   }, [invoices]);
 
   useEffect(() => {
-    // Auto-trigger print after a short delay to allow rendering
-    const timer = setTimeout(() => {
-      window.print();
-    }, 500);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+
+    const printAfterRender = async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+
+      const images = Array.from(
+        document.querySelectorAll<HTMLImageElement>(".report-print-overlay img")
+      );
+      await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
+      if (!cancelled) window.print();
+    };
+
+    void printAfterRender();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Listen for afterprint to auto-close
@@ -2675,7 +2715,7 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({
   console.log("[DEBUG ReportPrintView] STEP 6 - rendering", invoiceCount, "invoice divs");
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-white overflow-y-auto">
+    <div className="report-print-overlay fixed inset-0 z-[9999] overflow-y-auto bg-white">
       {/* Close button - hidden during print */}
       <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm">
         <span className="text-sm font-medium text-gray-700">
@@ -2739,10 +2779,26 @@ const ReportPrintView: React.FC<ReportPrintViewProps> = ({
 
       <style>{`
 @media print {
+          html,
+          body {
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .report-print-overlay {
+            position: static !important;
+            inset: auto !important;
+            width: 100% !important;
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            z-index: auto !important;
+          }
           .report-invoice-page {
+            position: relative !important;
+            width: 100% !important;
+            margin: 0 auto !important;
             page-break-inside: auto;
             break-inside: auto;
-            width: 100%;
           }
           .no-print {
             display: none !important;

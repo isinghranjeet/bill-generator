@@ -25,7 +25,7 @@ const App = () => (
         <Sonner />
         <PwaUpdateBanner />
         <OfflineBanner />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <div className="no-print">
             <header className="fixed top-4 right-4 z-[100] pointer-events-none">
               <div className="flex flex-col items-end gap-2 pointer-events-auto">

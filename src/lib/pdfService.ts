@@ -400,7 +400,12 @@ export async function generateReportPdf(
 
         const imgHeightOnPage = (pdfWidth * srcHeight) / canvas.width;
         pdf.addImage(pageImgData, "PNG", 0, 0, pdfWidth, imgHeightOnPage);
+        pageCanvas.width = 0;
+        pageCanvas.height = 0;
       }
+
+      canvas.width = 0;
+      canvas.height = 0;
     }
 
     return pdf.output("blob");
